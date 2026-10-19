@@ -3,9 +3,9 @@ import UIKit
 
 /// The design language for LuckyGlass.
 ///
-/// The app uses a quiet operations-console aesthetic: neutral canvases, compact surfaces and
-/// semantic colour reserved for status and actions. Structure comes from typography, spacing and
-/// hairlines rather than decorative chrome.
+/// The app uses a crisp operations-console aesthetic: neutral canvases, compact surfaces and
+/// saturated semantic colours. Colour is concentrated in controls and icon plates, which keeps
+/// dense status screens easy to scan in both appearances.
 ///
 /// Everything here is a token. Screens must not hard-code colours, radii or durations — a value
 /// that appears twice belongs in this file.
@@ -35,17 +35,19 @@ enum LuckyTheme {
 
     // MARK: - Backdrop and surfaces
 
-    static let canvasTop = dynamic(light: 0xF5F6F8, dark: 0x0D1117)
+    static let canvasTop = dynamic(light: 0xF3F5F8, dark: 0x0D1117)
 
     /// Content-layer card fill. Nearly opaque — cards live *under* the glass chrome and must never
     /// be glass themselves.
     static let surface = dynamic(light: 0xFFFFFF, dark: 0x171C24)
     /// A second level for rows nested inside a card.
-    static let surfaceRaised = dynamic(light: 0xF2F4F7, dark: 0x20262E)
+    static let surfaceRaised = dynamic(light: 0xF1F4F8, dark: 0x202731)
     /// Code, JSON and log backgrounds.
-    static let surfaceSunken = dynamic(light: 0xEAEDF1, dark: 0x0B1016)
-    static let hairline = dynamic(light: 0xDDE1E6, dark: 0x2C3540)
-    static let separator = dynamic(light: 0xE8EBEF, dark: 0x282F38)
+    static let surfaceSunken = dynamic(light: 0xE9EDF3, dark: 0x0B1016)
+    static let hairline = dynamic(light: 0xD9DEE7, dark: 0x303947)
+    static let separator = dynamic(light: 0xE7EAF0, dark: 0x29313C)
+    static let surfaceHighlight = dynamic(light: 0xFFFFFF, dark: 0x26303D)
+
     static let textPrimary = dynamic(light: 0x151A23, dark: 0xF4F6F8)
     static let textSecondary = dynamic(light: 0x4F5A69, dark: 0xADB7C5)
     static let textTertiary = dynamic(light: 0x788393, dark: 0x778393)
@@ -58,14 +60,14 @@ enum LuckyTheme {
     /// radius minus the padding between them, which `ConcentricRectangle` derives from the
     /// container shape — these constants are the *outer* values.
     enum Radius {
-        static let hero: CGFloat = 20
-        static let card: CGFloat = 14
-        static let panel: CGFloat = 10
-        static let row: CGFloat = 8
-        static let chip: CGFloat = 8
-        static let field: CGFloat = 10
+        static let hero: CGFloat = 28
+        static let card: CGFloat = 20
+        static let panel: CGFloat = 16
+        static let row: CGFloat = 14
+        static let chip: CGFloat = 10
+        static let field: CGFloat = 14
         /// Floor passed to `.concentric(minimum:)` so a nested corner never collapses to a square.
-        static let concentricFloor: CGFloat = 6
+        static let concentricFloor: CGFloat = 8
     }
 
     // MARK: - Spacing
@@ -80,7 +82,7 @@ enum LuckyTheme {
         static let xxl: CGFloat = 32
         /// Page side margin. Also the spacing handed to `GlassEffectContainer`, which uses it to
         /// decide how close two glass shapes must be before their fields merge.
-        static let gutter: CGFloat = 16
+        static let gutter: CGFloat = 20
         /// Vertical rhythm between repeated records in a scroll view.
         static let stack: CGFloat = 16
         /// Inner padding of a card, and therefore the concentric inset of anything drawn inside
@@ -100,10 +102,10 @@ enum LuckyTheme {
     /// Numerics and display sizes use `.rounded` so digits feel warmer and less mechanical at
     /// large scale — the difference is most obvious in metric tiles and the page hero.
     enum Text {
-        static let hero = Font.system(size: 27, weight: .semibold, design: .rounded)
-        static let title = Font.system(size: 20, weight: .semibold, design: .rounded)
-        static let sectionTitle = Font.system(size: 12, weight: .semibold, design: .default)
-        static let cardTitle = Font.system(size: 15, weight: .semibold, design: .default)
+        static let hero = Font.system(size: 28, weight: .bold, design: .rounded)
+        static let title = Font.system(size: 21, weight: .bold, design: .rounded)
+        static let sectionTitle = Font.system(size: 13, weight: .bold, design: .default)
+        static let cardTitle = Font.system(size: 16, weight: .semibold, design: .default)
         static let body = Font.system(size: 15, weight: .regular, design: .default)
         static let bodyMedium = Font.system(size: 15, weight: .medium, design: .default)
         static let caption = Font.system(size: 12, weight: .regular, design: .default)
@@ -111,8 +113,8 @@ enum LuckyTheme {
         static let label = Font.system(size: 13, weight: .medium, design: .default)
         /// The big number in a metric tile — `.rounded` so the numeral feels at home beside the
         /// icon tile rather than technical. `.monospacedDigit()` is still applied at the call site.
-        static let metric = Font.system(size: 28, weight: .semibold, design: .rounded)
-        static let metricSmall = Font.system(size: 18, weight: .semibold, design: .rounded)
+        static let metric = Font.system(size: 26, weight: .bold, design: .rounded)
+        static let metricSmall = Font.system(size: 19, weight: .bold, design: .rounded)
         /// JSON, logs and paths. Monospaced digits alone are not enough — these need fixed advance.
         static let code = Font.system(size: 12, weight: .regular, design: .monospaced)
         static let codeSmall = Font.system(size: 11, weight: .regular, design: .monospaced)

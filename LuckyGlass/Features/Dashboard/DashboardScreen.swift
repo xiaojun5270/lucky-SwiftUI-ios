@@ -78,117 +78,71 @@ private struct DashboardLiveReader<Content: View>: View {
     }
 }
 
-/// The dashboard identity and its primary resource readout. The host stays unframed so it anchors
-/// the page; one quiet panel below carries both current values and their shared history.
+/// The dashboard's first panel: one dense read of the host instead of separate same-weight cards.
 private struct DashboardHostPanel: View {
     var status: LuckyLiveStatus?
     var connected: Bool
-    var baseURL: String
 
     private var memory: Double {
         guard let status else { return 0 }
         return Format.percent(status.usedMem, status.totalMem)
     }
 
-    private var host: String {
-        guard !baseURL.isEmpty else { return "Lucky 主机" }
-        return URL(string: baseURL)?.host ?? baseURL
-    }
-
-    private var systemSeries: [LuckySparkSeries] {
-        let history = status?.history ?? []
-        return [
-            LuckySparkSeries(id: "system-cpu", values: history.map(\.systemCpuPercent),
-                             tone: .brand, filled: true),
-            LuckySparkSeries(id: "process-cpu", values: history.map(\.processCpuPercent),
-                             tone: .danger),
-            LuckySparkSeries(id: "system-memory",
-                             values: history.map { Format.percent($0.usedMem, $0.totalMem) },
-                             tone: .ok),
-        ]
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            HStack(alignment: .top, spacing: LuckyTheme.Space.m) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("总览")
-                        .font(LuckyTheme.Text.hero)
+        LuckyCard(padding: 0, spacing: 0) {
+            HStack(spacing: LuckyTheme.Space.m) {
+                LuckyIconTile(symbol: "server.rack", size: 42, glyph: 19, role: .server)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("主机状态")
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(LuckyTheme.textPrimary)
-                    HStack(spacing: 7) {
-                        LuckyStatusDot(tone: connected ? .ok : .warning)
-                        Text(host)
-                            .font(LuckyTheme.Text.captionMedium)
-                            .foregroundStyle(LuckyTheme.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
+                    Text(connected ? "实时状态流已连接" : "正在连接状态流")
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textSecondary)
                 }
                 Spacer(minLength: 0)
-                Text(connected ? "实时" : "连接中")
-                    .font(LuckyTheme.Text.captionMedium)
-                    .foregroundStyle(connected ? LuckyTheme.success : LuckyTheme.warning)
-                    .padding(.top, 8)
+                LuckyChip(text: connected ? "在线" : "连接中",
+                          tone: connected ? .ok : .warning,
+                          symbol: connected ? "checkmark" : "arrow.clockwise")
             }
+            .padding(LuckyTheme.Space.cardInset)
 
-            LuckyCard {
-                HStack(spacing: 0) {
-                    primaryMetric("CPU", status.map { JSCompat.toFixed($0.usedCpu, 1) + "%" } ?? "--",
-                                  detail: "系统占用")
-                    primaryDivider
-                    primaryMetric("内存", status == nil ? "--" : JSCompat.toFixed(memory, 1) + "%",
-                                  detail: status.map { Format.bytes($0.usedMem) } ?? "正在读取")
-                }
-                LuckyHairline()
-                LuckyWrap(spacing: LuckyTheme.Space.m, lineSpacing: 6) {
-                    DashboardLegend(label: "系统 CPU", tone: .brand)
-                    DashboardLegend(label: "进程 CPU", tone: .danger)
-                    DashboardLegend(label: "系统内存", tone: .ok)
-                }
-                LuckySparkline(series: systemSeries, height: 112, ceiling: 100)
-                LuckyHairline()
-                HStack(spacing: 0) {
-                    metric("进程 CPU",
-                           status.map { JSCompat.toFixed($0.currentProcessUsedCpu, 1) + "%" } ?? "--")
-                    metricDivider
-                    metric("进程内存", status.map { Format.bytes($0.processUsedMem) } ?? "--")
-                    metricDivider
-                    metric("协程", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--")
-                }
+            LuckyHairline()
+
+            HStack(alignment: .center, spacing: 0) {
+                LuckyLoadGauge(label: "系统 CPU", value: status?.usedCpu)
+                gaugeDivider
+                LuckyLoadGauge(label: "系统内存", value: status == nil ? nil : memory)
             }
+            .padding(.horizontal, LuckyTheme.Space.l)
+            .padding(.vertical, LuckyTheme.Space.l)
+
+            LuckyHairline()
+
+            HStack(spacing: 0) {
+                metric("进程 CPU",
+                       status.map { JSCompat.toFixed($0.currentProcessUsedCpu, 1) + "%" } ?? "--",
+                       tone: .brand)
+                metricDivider
+                metric("进程内存", status.map { Format.bytes($0.processUsedMem) } ?? "--",
+                       tone: .info)
+                metricDivider
+                metric("协程数", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--",
+                       tone: .warning)
+            }
+            .padding(.vertical, LuckyTheme.Space.m)
+            .background(LuckyTheme.surfaceRaised)
         }
     }
 
-    private func primaryMetric(_ label: String, _ value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textSecondary)
-            Text(value)
-                .font(LuckyTheme.Text.metric)
-                .foregroundStyle(LuckyTheme.textPrimary)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(detail)
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textTertiary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, LuckyTheme.Space.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func metric(_ label: String, _ value: String) -> some View {
+    private func metric(_ label: String, _ value: String, tone: LuckyTone) -> some View {
         VStack(alignment: .center, spacing: 4) {
             Text(label)
-                .font(LuckyTheme.Text.caption)
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(LuckyTheme.textTertiary)
             Text(value)
-                .font(LuckyTheme.Text.captionMedium)
-                .foregroundStyle(LuckyTheme.textPrimary)
+                .font(LuckyTheme.Text.metricSmall)
+                .foregroundStyle(tone.tint)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
@@ -198,12 +152,12 @@ private struct DashboardHostPanel: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var primaryDivider: some View {
-        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 66)
+    private var gaugeDivider: some View {
+        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 82)
     }
 
     private var metricDivider: some View {
-        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 34)
+        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 54)
     }
 }
 
@@ -217,7 +171,7 @@ private struct DashboardRouteButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                LuckyIconTile(symbol: symbol, size: 32, glyph: 14, role: iconRole)
+                LuckyIconTile(symbol: symbol, size: 36, glyph: 16, role: iconRole)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(LuckyTheme.Text.captionMedium)
                     Text(detail)
@@ -227,13 +181,14 @@ private struct DashboardRouteButton: View {
                 }
                 .foregroundStyle(LuckyTheme.textPrimary)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(LuckyTheme.textTertiary)
             }
             .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .background(LuckyTheme.surface, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
+            .overlay {
+                RoundedRectangle(cornerRadius: LuckyTheme.Radius.panel, style: .continuous)
+                    .strokeBorder(LuckyTheme.hairline, lineWidth: LuckyTheme.strokeWidth)
+            }
         }
         .buttonStyle(.plain)
     }
@@ -311,9 +266,13 @@ private struct ReverseProxyCard: View {
                     }
                     Spacer(minLength: LuckyTheme.Space.xs)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(LuckyTheme.textTertiary)
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(LuckyTheme.idle)
+                        )
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
@@ -329,12 +288,12 @@ private struct ReverseProxyCard: View {
             portsMasked.toggle()
         } label: {
             Image(systemName: portsMasked ? "eye" : "eye.slash")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(portsMasked ? LuckyTheme.accent : LuckyTheme.textSecondary)
-                .frame(width: 32, height: 32)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: 36, height: 36)
                 .background(
-                    RoundedRectangle(cornerRadius: LuckyTheme.Radius.row, style: .continuous)
-                        .fill(portsMasked ? LuckyTheme.accentSoft : LuckyTheme.surfaceRaised)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(portsMasked ? LuckyTheme.accent : LuckyTheme.idle)
                 )
         }
         .buttonStyle(DashboardPressStyle())
@@ -430,7 +389,6 @@ struct DashboardScreen: View {
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var session = LuckySession.shared
 
     @State private var rules: [LuckyListItem] = []
     @State private var rulesReady = false
@@ -445,28 +403,21 @@ struct DashboardScreen: View {
     var body: some View {
         LuckyPage(spacing: LuckyTheme.Space.section, refresh: { await refreshAll() }) {
             DashboardLiveReader { statusStore in
-                DashboardHostPanel(status: statusStore.data, connected: statusStore.connected,
-                                   baseURL: session.baseUrl)
                 if !statusStore.error.isEmpty, statusStore.data == nil {
                     LuckyErrorCard(message: statusStore.error)
                 }
+                DashboardHostPanel(status: statusStore.data, connected: statusStore.connected)
             }
 
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-                LuckySectionHeader(title: "快捷入口")
-                LuckyCard(padding: 0, spacing: 0) {
-                    HStack(spacing: 0) {
-                        DashboardRouteButton(title: "Docker", detail: "容器与镜像",
-                                             symbol: LuckySymbol.docker, iconRole: .docker) {
-                            navigator.push(.docker())
-                        }
-                        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 42)
-                        DashboardRouteButton(title: "内网穿透", detail: "隧道与代理",
-                                             symbol: "point.3.connected.trianglepath.dotted",
-                                             iconRole: .tunnels) {
-                            navigator.reset(to: .services)
-                        }
-                    }
+            HStack(spacing: LuckyTheme.Space.m) {
+                DashboardRouteButton(title: "Docker", detail: "容器与镜像",
+                                     symbol: LuckySymbol.docker, iconRole: .docker) {
+                    navigator.push(.docker())
+                }
+                DashboardRouteButton(title: "内网穿透", detail: "隧道与代理",
+                                     symbol: "point.3.connected.trianglepath.dotted",
+                                     iconRole: .tunnels) {
+                    navigator.reset(to: .services)
                 }
             }
 
@@ -478,19 +429,51 @@ struct DashboardScreen: View {
                 if let status = statusStore.data {
                     if horizontalSizeClass == .regular {
                         HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
+                            systemPanel(status)
                             networkPanel(status)
-                            serverPanel(status)
                         }
                     } else {
+                        systemPanel(status)
                         networkPanel(status)
-                        serverPanel(status)
                     }
+                    serverPanel(status)
                 }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .task(id: active) { await holdStatus() }
         .task(id: active) { await pollRules() }
+    }
+
+    /// 系统资源 — `TrendChart maxValue={100}` over the socket's 90-sample history. The original
+    /// draws bare polylines; area-filling the primary line is the one visual liberty taken here.
+    private func systemPanel(_ status: LuckyLiveStatus) -> some View {
+        LuckyCard {
+            LuckySectionHeader(title: "系统资源", symbol: LuckySymbol.cpu, iconRole: .system) {
+                LuckyChip(text: "\(status.history.count) 个采样", tone: .idle)
+            }
+            LuckyHairline()
+            LuckyWrap(spacing: LuckyTheme.Space.m, lineSpacing: 6) {
+                DashboardLegend(label: "系统 CPU", tone: .brand)
+                DashboardLegend(label: "进程 CPU", tone: .danger)
+                DashboardLegend(label: "系统内存", tone: .ok)
+            }
+            LuckySparkline(series: systemSeries(status.history), height: 128, ceiling: 100)
+        }
+    }
+
+    /// Memory is charted as a percentage of the total reported in the same sample, not of the
+    /// latest total — a host that grows its RAM mid-history keeps a truthful curve either way.
+    private func systemSeries(_ history: [LuckyStatusSample]) -> [LuckySparkSeries] {
+        [
+            LuckySparkSeries(id: "system-cpu", values: history.map(\.systemCpuPercent),
+                             tone: .brand, filled: true),
+            LuckySparkSeries(id: "process-cpu", values: history.map(\.processCpuPercent),
+                             tone: .danger),
+            LuckySparkSeries(id: "system-memory",
+                             values: history.map { Format.percent($0.usedMem, $0.totalMem) },
+                             tone: .ok),
+        ]
     }
 
     /// 网络趋势 — in and out share one scale (`LuckySparkline` takes its ceiling from the largest
@@ -564,7 +547,7 @@ struct DashboardScreen: View {
     private func serverFact(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(LuckyTheme.textTertiary)
             Text(value)
                 .font(LuckyTheme.Text.captionMedium)

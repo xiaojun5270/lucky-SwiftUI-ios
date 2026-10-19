@@ -113,8 +113,8 @@ enum LuckySymbol {
     }
 }
 
-/// A soft semantic icon plate. Colour identifies the function without making every glyph compete
-/// with live status and primary actions.
+/// A saturated icon plate with a white glyph. This is the visual anchor for every internal
+/// function; App Icon and brand artwork remain independent assets.
 ///
 /// Not glass, deliberately — a list screen can show thirty of these, and thirty glass plates inside
 /// a scroll view is the exact pitfall the design system exists to avoid.
@@ -141,12 +141,12 @@ struct LuckyFunctionIcon: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.36, style: .continuous)
-            .fill(color.opacity(0.13))
+            .fill(color)
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: glyph, weight: .semibold))
-                    .foregroundStyle(color)
+                    .foregroundStyle(Color.white)
             )
             .accessibilityHidden(true)
     }

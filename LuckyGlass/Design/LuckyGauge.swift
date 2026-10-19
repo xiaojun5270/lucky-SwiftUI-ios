@@ -1,5 +1,70 @@
 import SwiftUI
 
+/// A compact 0-100 resource gauge for dashboard summaries.
+///
+/// The ring keeps the current value scannable without competing with the rolling charts below it.
+/// Passing `nil` preserves the layout while the first status frame is still loading.
+struct LuckyLoadGauge: View {
+    var label: String
+    var value: Double?
+    var size: CGFloat = 82
+
+    private var validValue: Double? {
+        guard let value, value.isFinite else { return nil }
+        return value
+    }
+
+    private var progress: Double {
+        min(max(validValue ?? 0, 0), 100) / 100
+    }
+
+    private var tone: LuckyTone {
+        guard let validValue else { return .idle }
+        return .load(validValue)
+    }
+
+    private var displayValue: String {
+        validValue.map { JSCompat.toFixed($0, 1) } ?? "--"
+    }
+
+    var body: some View {
+        VStack(spacing: LuckyTheme.Space.s) {
+            ZStack {
+                Circle()
+                    .stroke(LuckyTheme.surfaceRaised, lineWidth: 9)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        tone.tint,
+                        style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 0) {
+                    Text(displayValue)
+                        .font(LuckyTheme.Text.metricSmall)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("%")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                }
+            }
+            .frame(width: size, height: size)
+
+            Text(label)
+                .font(LuckyTheme.Text.captionMedium)
+                .foregroundStyle(LuckyTheme.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .animation(LuckyTheme.Motion.snap, value: progress)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(validValue == nil ? "正在读取" : "百分之 " + displayValue)
+    }
+}
+
 /// One line of a sparkline.
 struct LuckySparkSeries: Identifiable {
     var id: String

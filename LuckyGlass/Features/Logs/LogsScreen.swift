@@ -133,15 +133,15 @@ struct LogsScreen: View {
 
     private var outputHeader: some View {
         HStack(spacing: LuckyTheme.Space.s) {
+            LuckyIconTile(symbol: "terminal", size: 30, glyph: 13, role: .logs)
             VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                 HStack(spacing: 6) {
-                    Text("运行日志")
-                        .font(LuckyTheme.Text.hero)
+                    Text("全局输出")
+                        .font(LuckyTheme.Text.cardTitle)
                         .foregroundStyle(LuckyTheme.textPrimary)
                     LuckyStatusDot(tone: statusTone)
                 }
-                Text(paused ? "全局输出 · 刷新已暂停 · \(countText)"
-                            : "全局输出 · 每 3 秒刷新 · \(countText)")
+                Text(paused ? "刷新已暂停 · \(countText)" : "每 3 秒刷新 · \(countText)")
                     .font(LuckyTheme.Text.caption)
                     .foregroundStyle(LuckyTheme.textTertiary)
                     .lineLimit(1)
@@ -177,32 +177,16 @@ struct LogsScreen: View {
     }
 
     private var filterBar: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: LuckyTheme.Space.s) {
-                levelFilter
-                logActions
-            }
-            VStack(alignment: .trailing, spacing: LuckyTheme.Space.s) {
-                levelFilter
-                logActions
-            }
-        }
-    }
-
-    private var levelFilter: some View {
-        LuckyGlassSegmentedControl(
-            selection: $filter,
-            segments: [
-                LuckySegment(.all, GlobalLogFilter.all.title),
-                LuckySegment(.warning, GlobalLogFilter.warning.title),
-                LuckySegment(.error, GlobalLogFilter.error.title),
-            ],
-            glass: false
-        )
-    }
-
-    private var logActions: some View {
         HStack(spacing: LuckyTheme.Space.s) {
+            LuckyGlassSegmentedControl(
+                selection: $filter,
+                segments: [
+                    LuckySegment(.all, GlobalLogFilter.all.title),
+                    LuckySegment(.warning, GlobalLogFilter.warning.title),
+                    LuckySegment(.error, GlobalLogFilter.error.title),
+                ],
+                glass: false
+            )
             LuckyGlassIconButton(symbol: LuckySymbol.copy, label: "复制当前日志") {
                 copyVisibleLines()
             }

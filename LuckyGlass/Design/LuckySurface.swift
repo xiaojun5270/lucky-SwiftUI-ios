@@ -27,9 +27,13 @@ struct LuckyCard<Content: View>: View {
             .clipShape(shape)
             .overlay(
                 shape.strokeBorder(
-                    tone?.tint.opacity(0.34) ?? LuckyTheme.hairline,
+                    tone?.tint.opacity(0.42) ?? LuckyTheme.hairline,
                     lineWidth: LuckyTheme.strokeWidth
                 )
+            )
+            .overlay(
+                shape.inset(by: 1)
+                    .stroke(LuckyTheme.surfaceHighlight.opacity(0.55), lineWidth: 0.5)
             )
             // Lets anything inside ask for `ConcentricRectangle()` and get the right inner radius.
             .containerShape(shape)
@@ -83,15 +87,11 @@ struct LuckySectionHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             if let symbol {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle((iconRole ?? LuckyIconRole.symbol(symbol)).color)
-                    .frame(width: 20, height: 20)
-                    .accessibilityHidden(true)
+                LuckyIconTile(symbol: symbol, size: 28, glyph: 12, role: iconRole)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(LuckyTheme.Text.cardTitle)
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(LuckyTheme.textPrimary)
                     .textCase(nil)
                     .lineLimit(2)
