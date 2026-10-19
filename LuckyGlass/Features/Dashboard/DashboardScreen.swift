@@ -109,14 +109,25 @@ private struct DashboardHostPanel: View {
 
             LuckyHairline()
 
+            HStack(alignment: .center, spacing: 0) {
+                LuckyLoadGauge(label: "系统 CPU", value: status?.usedCpu)
+                gaugeDivider
+                LuckyLoadGauge(label: "系统内存", value: status == nil ? nil : memory)
+            }
+            .padding(.horizontal, LuckyTheme.Space.l)
+            .padding(.vertical, LuckyTheme.Space.l)
+
+            LuckyHairline()
+
             HStack(spacing: 0) {
-                metric("CPU", status.map { JSCompat.toFixed($0.usedCpu, 1) + "%" } ?? "--",
+                metric("进程 CPU",
+                       status.map { JSCompat.toFixed($0.currentProcessUsedCpu, 1) + "%" } ?? "--",
                        tone: .brand)
-                divider
-                metric("内存", status == nil ? "--" : JSCompat.toFixed(memory, 1) + "%",
-                       tone: .ok)
-                divider
-                metric("协程", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--",
+                metricDivider
+                metric("进程内存", status.map { Format.bytes($0.processUsedMem) } ?? "--",
+                       tone: .info)
+                metricDivider
+                metric("协程数", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--",
                        tone: .warning)
             }
             .padding(.vertical, LuckyTheme.Space.m)
@@ -130,7 +141,7 @@ private struct DashboardHostPanel: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(LuckyTheme.textTertiary)
             Text(value)
-                .font(.system(size: 21, weight: .bold))
+                .font(LuckyTheme.Text.metricSmall)
                 .foregroundStyle(tone.tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -141,8 +152,12 @@ private struct DashboardHostPanel: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var divider: some View {
-        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 38)
+    private var gaugeDivider: some View {
+        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 82)
+    }
+
+    private var metricDivider: some View {
+        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 54)
     }
 }
 
@@ -373,6 +388,7 @@ private struct ReverseProxyCard: View {
 struct DashboardScreen: View {
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.scenePhase) private var phase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var rules: [LuckyListItem] = []
     @State private var rulesReady = false
@@ -411,8 +427,15 @@ struct DashboardScreen: View {
             }
             DashboardLiveReader { statusStore in
                 if let status = statusStore.data {
-                    systemPanel(status)
-                    networkPanel(status)
+                    if horizontalSizeClass == .regular {
+                        HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
+                            systemPanel(status)
+                            networkPanel(status)
+                        }
+                    } else {
+                        systemPanel(status)
+                        networkPanel(status)
+                    }
                     serverPanel(status)
                 }
             }
@@ -425,10 +448,9 @@ struct DashboardScreen: View {
     /// 系统资源 — `TrendChart maxValue={100}` over the socket's 90-sample history. The original
     /// draws bare polylines; area-filling the primary line is the one visual liberty taken here.
     private func systemPanel(_ status: LuckyLiveStatus) -> some View {
-        let memory = Format.percent(status.usedMem, status.totalMem)
-        return LuckyCard {
+        LuckyCard {
             LuckySectionHeader(title: "系统资源", symbol: LuckySymbol.cpu, iconRole: .system) {
-                LuckyChip(text: "内存 \(JSCompat.toFixed(memory, 1))%", tone: .idle)
+                LuckyChip(text: "\(status.history.count) 个采样", tone: .idle)
             }
             LuckyHairline()
             LuckyWrap(spacing: LuckyTheme.Space.m, lineSpacing: 6) {
@@ -505,8 +527,8 @@ struct DashboardScreen: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// 服务器信息 — the socket's non-charted fields, in the original's order. `String(value)` on a
-    /// JavaScript number is `JSONSerializer.numberString`, which is why these stay `Double`s
+    /// Operational details not already promoted into the live resource summary. `String(value)`
+    /// on a JavaScript number is `JSONSerializer.numberString`, which is why these stay `Double`s
     /// instead of being rounded to `Int` for display.
     private func serverPanel(_ status: LuckyLiveStatus) -> some View {
         LuckyCard {
@@ -516,8 +538,6 @@ struct DashboardScreen: View {
                 serverFact("进程启动", status.runTime.isEmpty ? "--" : status.runTime)
                 serverFact("查询时间", status.queryTime.isEmpty ? "--" : status.queryTime)
                 serverFact("打开句柄", JSONSerializer.numberString(status.handleCount))
-                serverFact("协程", JSONSerializer.numberString(status.goroutine))
-                serverFact("进程内存", Format.bytes(status.processUsedMem))
                 serverFact("GC 次数", JSONSerializer.numberString(status.numGc))
                 serverFact("堆内存", Format.bytes(status.heapInuse))
             }

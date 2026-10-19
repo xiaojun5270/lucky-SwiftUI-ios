@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// The severity vocabulary shared by log tinting and the global log filter.
+enum LuckyLogSeverity: Hashable {
+    case standard, warning, error
+
+    static func detect(_ line: String) -> Self {
+        // Level tags sit at the head of the line. Limiting the scan keeps large unstructured
+        // payloads from being searched in full whenever a visible row is redrawn.
+        let head = line.prefix(72).lowercased()
+        if head.contains("error") || head.contains("fatal") || head.contains("panic")
+            || head.contains("失败") || head.contains("错误") { return .error }
+        if head.contains("warn") || head.contains("警告") { return .warning }
+        return .standard
+    }
+
+    var tone: LuckyTone? {
+        switch self {
+        case .standard: nil
+        case .warning: .warning
+        case .error: .danger
+        }
+    }
+}
+
 /// The log viewer shared by the global log screen, the per-service log screens and the container
 /// log screen. It takes the already-extracted lines from `LuckyLog` — nothing here parses a
 /// payload.
@@ -35,6 +58,7 @@ struct LuckyLogView: View {
             }
             .frame(height: height)
             .background(ConcentricRectangle().fill(LuckyTheme.surfaceSunken))
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: lines.count) {
                 guard follows else { return }
                 proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
@@ -79,13 +103,7 @@ private struct LuckyLogLine: View, Equatable {
     /// Only failures and warnings are tinted. Colouring every line by level turns a busy log into
     /// confetti, and Lucky's own logs are mostly untagged Chinese sentences.
     private static func tone(_ line: String) -> LuckyTone? {
-        // Level tags sit at the head of the line; scanning the whole string would cost a full pass
-        // over every visible row on every frame of a scroll.
-        let head = line.prefix(72).lowercased()
-        if head.contains("error") || head.contains("fatal") || head.contains("panic")
-            || head.contains("失败") || head.contains("错误") { return .danger }
-        if head.contains("warn") || head.contains("警告") { return .warning }
-        return nil
+        LuckyLogSeverity.detect(line).tone
     }
 
     /// Marks every occurrence of the query. `AttributedString` is built per visible line only, and

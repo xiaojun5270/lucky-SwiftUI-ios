@@ -1,5 +1,50 @@
 import SwiftUI
 
+/// A compact search field for dense list and console screens.
+struct LuckySearchField: View {
+    @Binding var text: String
+    var placeholder: String = "搜索"
+
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: LuckyTheme.Space.s) {
+            Image(systemName: LuckySymbol.search)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(focused ? LuckyTheme.accent : LuckyTheme.textTertiary)
+            TextField(placeholder, text: $text)
+                .font(LuckyTheme.Text.body)
+                .foregroundStyle(LuckyTheme.textPrimary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused($focused)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清空搜索")
+            }
+        }
+        .padding(.horizontal, LuckyTheme.Space.m)
+        .frame(minHeight: LuckyTheme.Space.touchTarget)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.field, style: .continuous)
+            shape.fill(LuckyTheme.surface)
+                .overlay(
+                    shape.strokeBorder(
+                        focused ? LuckyTheme.accent.opacity(0.7) : LuckyTheme.hairline,
+                        lineWidth: focused ? 1.6 : LuckyTheme.strokeWidth
+                    )
+                )
+        }
+    }
+}
+
 /// Form controls, all on the content layer.
 ///
 /// The structured request form generates dozens of these at once from a schema, so they are plain
