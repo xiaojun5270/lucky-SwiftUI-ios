@@ -8,6 +8,7 @@ struct SettingsScreen: View {
 
     var body: some View {
         LuckyPage(spacing: LuckyTheme.Space.section) {
+            LuckyPageHero(title: "设置", subtitle: "连接、安全与当前会话")
             connection
             security
             LuckyCard {
@@ -37,7 +38,7 @@ struct SettingsScreen: View {
                 LuckyIconTile(symbol: "server.rack", size: 48, glyph: 22, role: .server)
                 VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                     Text(session.account.isEmpty ? "管理员" : session.account)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(LuckyTheme.textPrimary)
                 }
                 Spacer(minLength: LuckyTheme.Space.s)
@@ -65,7 +66,7 @@ struct SettingsScreen: View {
         HStack(spacing: 8) {
             LuckyIconTile(symbol: symbol, size: 28, glyph: 12, role: iconRole)
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 10, weight: .bold))
+                Text(label).font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(LuckyTheme.textTertiary)
                 Text(value).font(LuckyTheme.Text.captionMedium)
                     .foregroundStyle(LuckyTheme.textPrimary)
