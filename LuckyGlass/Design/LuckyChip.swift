@@ -45,13 +45,13 @@ struct LuckyChip: View {
                 .font(LuckyTheme.Text.captionMedium)
                 .lineLimit(1)
         }
-        .foregroundStyle(filled ? Color.white : tone.tint)
+        .foregroundStyle(tone.tint)
         .padding(.horizontal, LuckyTheme.Space.s)
         .padding(.vertical, 5)
         .background {
             let shape = Capsule(style: .continuous)
             if filled {
-                shape.fill(tone.tint)
+                shape.fill(tone.fill)
             } else {
                 shape.strokeBorder(tone.tint.opacity(0.45), lineWidth: LuckyTheme.strokeWidth)
             }
@@ -81,7 +81,7 @@ struct LuckyMethodBadge: View {
     var body: some View {
         Text(method.rawValue)
             .font(.system(size: compact ? 9 : 10, weight: .heavy, design: .rounded))
-            .foregroundStyle(Color.white)
+            .foregroundStyle(LuckyTheme.textOnAccent)
             .padding(.horizontal, compact ? 5 : 6)
             .padding(.vertical, compact ? 2 : 3)
             .background(
@@ -101,10 +101,10 @@ struct LuckyCountBadge: View {
         Text("\(count)")
             .font(.system(size: 11, weight: .bold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(Color.white)
+            .foregroundStyle(tone.tint)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule(style: .continuous).fill(tone.tint))
+            .background(Capsule(style: .continuous).fill(tone.fill))
             .contentTransition(.numericText())
     }
 }

@@ -113,8 +113,7 @@ enum LuckySymbol {
     }
 }
 
-/// A saturated icon plate with a white glyph. This is the visual anchor for every internal
-/// function; App Icon and brand artwork remain independent assets.
+/// A softly tinted icon plate; saturated fills are reserved for prominent actions.
 ///
 /// Not glass, deliberately — a list screen can show thirty of these, and thirty glass plates inside
 /// a scroll view is the exact pitfall the design system exists to avoid.
@@ -124,10 +123,12 @@ struct LuckyIconTile: View {
     var glyph: CGFloat = 18
     var tone: LuckyTone? = nil
     var role: LuckyIconRole? = nil
+    var filled: Bool = false
 
     var body: some View {
         LuckyFunctionIcon(symbol: symbol, size: size, glyph: glyph,
-                          color: tone?.tint ?? (role ?? LuckyIconRole.symbol(symbol)).color)
+                          color: tone?.tint ?? (role ?? LuckyIconRole.symbol(symbol)).color,
+                          filled: filled)
     }
 }
 
@@ -138,15 +139,16 @@ struct LuckyFunctionIcon: View {
     var size: CGFloat = 38
     var glyph: CGFloat = 18
     var color: Color = LuckyIconRole.neutral.color
+    var filled: Bool = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.36, style: .continuous)
-            .fill(color)
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(filled ? color : color.opacity(0.11))
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: glyph, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(filled ? LuckyTheme.textOnAccent : color)
             )
             .accessibilityHidden(true)
     }

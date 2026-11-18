@@ -62,12 +62,8 @@ struct LuckyDisclosureCard<Content: View>: View {
             if let count { LuckyCountBadge(count: count, tone: tone) }
             Image(systemName: "chevron.down")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(LuckyTheme.textTertiary)
                 .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(LuckyTheme.idle)
-                )
                 .rotationEffect(.degrees(expanded ? 0 : -90))
         }
         .contentShape(.rect)

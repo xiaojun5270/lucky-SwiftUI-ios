@@ -38,7 +38,7 @@ struct ModuleIndexScreen: View {
                         ]
                     )
                 }
-                .buttonStyle(LuckyCardButtonStyle(radius: LuckyTheme.Radius.panel))
+                .buttonStyle(.plain)
             }
         }
         .searchable(text: $search, prompt: "搜索模块名称或 Key")

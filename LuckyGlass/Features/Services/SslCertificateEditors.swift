@@ -109,17 +109,17 @@ struct SslDropdown: View {
                 HStack(spacing: LuckyTheme.Space.s) {
                     Text(option.label)
                         .font(selected ? LuckyTheme.Text.bodyMedium : LuckyTheme.Text.body)
-                        .foregroundStyle(selected ? Color.white : LuckyTheme.textPrimary)
+                        .foregroundStyle(selected ? LuckyTheme.accent : LuckyTheme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if selected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white)
+                            .foregroundStyle(LuckyTheme.accent)
                     }
                 }
                 .padding(.horizontal, LuckyTheme.Space.m)
                 .frame(minHeight: 42)
-                .background(selected ? LuckyTheme.accent : Color.clear)
+                .background(selected ? LuckyTheme.accentSoft : Color.clear)
                 .contentShape(Rectangle())
             }
         }

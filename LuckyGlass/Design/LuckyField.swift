@@ -30,14 +30,14 @@ struct LuckySearchField: View {
                 .accessibilityLabel("清空搜索")
             }
         }
-        .padding(.horizontal, LuckyTheme.Space.m)
-        .frame(minHeight: LuckyTheme.Space.touchTarget)
+        .padding(.horizontal, LuckyTheme.Space.l)
+        .frame(minHeight: 48)
         .background {
             let shape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.field, style: .continuous)
             shape.fill(LuckyTheme.surface)
                 .overlay(
                     shape.strokeBorder(
-                        focused ? LuckyTheme.accent.opacity(0.7) : LuckyTheme.hairline,
+                        focused ? LuckyTheme.accent.opacity(0.7) : .clear,
                         lineWidth: focused ? 1.6 : LuckyTheme.strokeWidth
                     )
                 )
@@ -62,6 +62,7 @@ struct LuckyTextField: View {
     /// submitting — so single-line stays the default and the login form keeps its 登录 key.
     var multiline: Bool = false
     var keyboard: UIKeyboardType = .default
+    var autocapitalization: TextInputAutocapitalization = .sentences
     var contentType: UITextContentType?
     var submitLabel: SubmitLabel = .return
     var tone: LuckyTone?
@@ -80,7 +81,7 @@ struct LuckyTextField: View {
                     .keyboardType(keyboard)
                     .textContentType(contentType)
                     .submitLabel(submitLabel)
-                    .textInputAutocapitalization(mono || secure ? .never : .sentences)
+                    .textInputAutocapitalization(mono || secure ? .never : autocapitalization)
                     .autocorrectionDisabled(mono || secure)
                     .focused($focused)
                     .onSubmit { onSubmit?() }
@@ -128,10 +129,10 @@ struct LuckyTextField: View {
     private var fieldBackground: some View {
         let shape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.field, style: .continuous)
         return shape
-            .fill(LuckyTheme.surfaceSunken)
+            .fill(LuckyTheme.surfaceRaised)
             .overlay(
                 shape.strokeBorder(
-                    focused ? (tone ?? .brand).tint.opacity(0.7) : LuckyTheme.hairline,
+                    focused ? (tone ?? .brand).tint.opacity(0.7) : (tone?.tint.opacity(0.5) ?? .clear),
                     lineWidth: focused ? 1.6 : LuckyTheme.strokeWidth
                 )
             )
@@ -152,7 +153,11 @@ struct LuckyFieldLabel: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: LuckyTheme.Space.xs) {
                 if let symbol {
-                    LuckyIconTile(symbol: symbol, size: 21, glyph: 9, tone: tone)
+                    Image(systemName: symbol)
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(tone?.tint ?? LuckyTheme.textTertiary)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
                 }
                 Text(label)
                     .font(LuckyTheme.Text.label)

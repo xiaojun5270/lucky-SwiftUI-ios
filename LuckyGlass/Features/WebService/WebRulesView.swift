@@ -108,12 +108,8 @@ extension WebRuleCard {
                 Spacer(minLength: 0)
                 Image(systemName: isOpen ? "chevron.up" : "chevron.down")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(LuckyTheme.textTertiary)
                     .frame(width: 24, height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(LuckyTheme.idle)
-                    )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)

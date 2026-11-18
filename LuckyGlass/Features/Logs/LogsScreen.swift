@@ -87,59 +87,73 @@ struct LogsScreen: View {
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.l) {
-            outputHeader
+            LuckyScreenHeader(title: "运行日志", subtitle: "查看服务器的实时活动") {
+                LuckyToolbarButton(symbol: LuckySymbol.refresh, label: "刷新日志", loading: fetching) {
+                    Task { await poll() }
+                }
+            }
             LuckySearchField(text: $query, placeholder: "搜索日志")
             filterBar
             if !failure.isEmpty {
                 LuckyErrorCard(message: failure) { Task { await poll() } }
             }
-            if lines.isEmpty {
-                if loaded, failure.isEmpty {
-                    if cleared {
-                        LuckyEmptyState(symbol: "trash", title: "已清空当前显示",
-                                        message: "新日志到达后会继续显示") {
-                            Button("重新载入历史", systemImage: "clock.arrow.circlepath") {
-                                Task { await reloadHistory() }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .frame(maxHeight: .infinity)
-                    } else {
-                        LuckyEmptyState(symbol: "terminal", title: "暂无实时日志")
-                            .frame(maxHeight: .infinity)
-                    }
-                } else if !loaded, failure.isEmpty {
-                    LuckyLoadingView().frame(maxHeight: .infinity)
-                }
-            } else if visibleLines.isEmpty {
-                LuckyEmptyState(symbol: "line.3.horizontal.decrease.circle",
-                                title: "没有匹配的日志",
-                                message: "尝试更换级别或搜索关键词")
-                    .frame(maxHeight: .infinity)
-            } else {
-                // `[...lines].reverse()` — newest first, so the interesting line is on screen
-                // without scrolling, and therefore no auto-follow.
-                LuckyLogView(lines: visibleLines, query: query, follows: false,
-                             height: nil, newestFirst: true)
-                    .clipShape(RoundedRectangle(cornerRadius: LuckyTheme.Radius.card,
-                                                style: .continuous))
+            VStack(spacing: 0) {
+                outputHeader.padding(LuckyTheme.Space.l)
+                LuckyHairline()
+                output
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(LuckyTheme.surface)
+            .clipShape(.rect(cornerRadius: LuckyTheme.Radius.card))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, LuckyTheme.Space.gutter)
         .padding(.top, LuckyTheme.Space.pageTop)
         .padding(.bottom, LuckyTheme.Space.m)
+        .frame(maxWidth: LuckyTheme.Layout.contentWidth, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var output: some View {
+        if lines.isEmpty {
+            if loaded, failure.isEmpty {
+                if cleared {
+                    LuckyEmptyState(symbol: "trash", title: "已清空当前显示",
+                                    message: "新日志到达后会继续显示") {
+                        Button("重新载入历史", systemImage: "clock.arrow.circlepath") {
+                            Task { await reloadHistory() }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    LuckyEmptyState(symbol: "terminal", title: "暂无实时日志")
+                        .frame(maxHeight: .infinity)
+                }
+            } else if !loaded, failure.isEmpty {
+                LuckyLoadingView().frame(maxHeight: .infinity)
+            }
+        } else if visibleLines.isEmpty {
+            LuckyEmptyState(symbol: "line.3.horizontal.decrease.circle",
+                            title: "没有匹配的日志",
+                            message: "尝试更换级别或搜索关键词")
+                .frame(maxHeight: .infinity)
+        } else {
+            // `[...lines].reverse()` — newest first, so the interesting line is on screen
+            // without scrolling, and therefore no auto-follow.
+            LuckyLogView(lines: visibleLines, query: query, follows: false,
+                         height: nil, newestFirst: true, fill: LuckyTheme.surface)
+        }
     }
 
     private var outputHeader: some View {
         HStack(spacing: LuckyTheme.Space.s) {
-            LuckyIconTile(symbol: "terminal", size: 30, glyph: 13, role: .logs)
             VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                 HStack(spacing: 6) {
-                    Text("全局输出")
-                        .font(LuckyTheme.Text.cardTitle)
-                        .foregroundStyle(LuckyTheme.textPrimary)
                     LuckyStatusDot(tone: statusTone)
+                    Text("实时输出")
+                        .font(LuckyTheme.Text.bodyMedium)
+                        .foregroundStyle(LuckyTheme.textPrimary)
                 }
                 Text(paused ? "刷新已暂停 · \(countText)" : "每 3 秒刷新 · \(countText)")
                     .font(LuckyTheme.Text.caption)
@@ -150,51 +164,39 @@ struct LogsScreen: View {
             Button {
                 paused.toggle()
             } label: {
-                LuckyIconTile(symbol: paused ? "play.fill" : "pause.fill", size: 30, glyph: 12,
-                              tone: paused ? .ok : .idle)
-                    .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
-                    .contentShape(Rectangle())
+                Label(paused ? "继续" : "暂停", systemImage: paused ? "play.fill" : "pause.fill")
+                    .font(LuckyTheme.Text.captionMedium)
+                    .foregroundStyle(LuckyTheme.accent)
+                    .padding(.horizontal, LuckyTheme.Space.m)
+                    .frame(minHeight: LuckyTheme.Space.touchTarget)
+                    .background(LuckyTheme.accentSoft, in: .capsule)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(paused ? "继续实时刷新" : "暂停实时刷新")
-            Button {
-                Task { await poll() }
-            } label: {
-                ZStack {
-                    LuckyIconTile(symbol: LuckySymbol.refresh, size: 30, glyph: 13)
-                        .opacity(fetching ? 0 : 1)
-                    if fetching {
-                        ProgressView().controlSize(.small).tint(LuckyTheme.accent)
-                    }
-                }
-                .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(fetching)
-            .accessibilityLabel("刷新")
         }
     }
 
     private var filterBar: some View {
         HStack(spacing: LuckyTheme.Space.s) {
-            LuckyGlassSegmentedControl(
-                selection: $filter,
-                segments: [
-                    LuckySegment(.all, GlobalLogFilter.all.title),
-                    LuckySegment(.warning, GlobalLogFilter.warning.title),
-                    LuckySegment(.error, GlobalLogFilter.error.title),
-                ],
-                glass: false
-            )
-            LuckyGlassIconButton(symbol: LuckySymbol.copy, label: "复制当前日志") {
-                copyVisibleLines()
+            Picker("日志级别", selection: $filter) {
+                Text(GlobalLogFilter.all.title).tag(GlobalLogFilter.all)
+                Text(GlobalLogFilter.warning.title).tag(GlobalLogFilter.warning)
+                Text(GlobalLogFilter.error.title).tag(GlobalLogFilter.error)
             }
-            .disabled(visibleLines.isEmpty)
-            LuckyGlassIconButton(symbol: "trash", label: "清空当前显示", tone: .danger) {
-                clearDisplay()
+            .pickerStyle(.segmented)
+            Menu {
+                Button("复制当前日志", systemImage: LuckySymbol.copy) { copyVisibleLines() }
+                    .disabled(visibleLines.isEmpty)
+                Button("清空当前显示", systemImage: "trash", role: .destructive) { clearDisplay() }
+                    .disabled(lines.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(LuckyTheme.Text.cardTitle)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
+                    .background(LuckyTheme.surface, in: .circle)
             }
-            .disabled(lines.isEmpty)
+            .accessibilityLabel("日志操作")
         }
     }
 

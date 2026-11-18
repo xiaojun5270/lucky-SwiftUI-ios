@@ -1,177 +1,149 @@
 import SwiftUI
 
-/// `app/(tabs)/manage.tsx`.
-///
-/// The seven service entry points, grouped by direct management and tunnelling.
+/// Service destinations share a grouped list layout and searchable vocabulary.
 struct ServicesScreen: View {
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var search = ""
 
-    private static let tunnelKinds = TunnelKind.allCases
-
-    private var filteredTunnelKinds: [TunnelKind] {
-        Self.tunnelKinds.filter { kind in
-            matches("内网穿透 隧道 代理 \(kind.rawValue) \(kind.title) \(kind.detail)")
-        }
+    private struct Entry: Identifiable {
+        var id: String
+        var title: String
+        var detail: String
+        var symbol: String
+        var role: LuckyIconRole
+        var keywords: String
+        var route: LuckyRoute
     }
 
-    private var hasManagementMatches: Bool {
-        matches("反向代理 Web TLS 域名 监听")
-            || matches("Docker 容器 镜像 网络 存储")
-            || matches("动态域名 DDNS 域名解析")
-            || matches("SSL 证书 HTTPS 续期")
-    }
+    private static let managementEntries: [Entry] = [
+        Entry(id: "web", title: "反向代理", detail: "域名、监听与 TLS 规则",
+              symbol: "globe.asia.australia", role: .web, keywords: "Web 代理 网络",
+              route: .webservice),
+        Entry(id: "docker", title: "Docker", detail: "容器、镜像与 Compose",
+              symbol: "shippingbox", role: .docker, keywords: "存储 网络",
+              route: .docker()),
+        Entry(id: "ddns", title: "动态域名", detail: "自动更新域名解析",
+              symbol: "arrow.triangle.2.circlepath", role: .ddns, keywords: "DDNS 自动化",
+              route: .service(.ddns)),
+        Entry(id: "ssl", title: "SSL 证书", detail: "证书申请与自动续期",
+              symbol: "checkmark.shield", role: .security, keywords: "HTTPS 安全",
+              route: .service(.ssl)),
+    ]
 
-    private var hasResults: Bool { hasManagementMatches || !filteredTunnelKinds.isEmpty }
+    private static let toolsEntry = Entry(
+        id: "tools", title: "接口调试", detail: "浏览模块与 API 端点",
+        symbol: LuckySymbol.debugger, role: .tools, keywords: "模块 开发 工具",
+        route: .moduleIndex
+    )
+
+    private var management: [Entry] { Self.managementEntries.filter(matches) }
+
+    private var tunnels: [Entry] {
+        TunnelKind.allCases.map { kind in
+            Entry(id: kind.rawValue, title: kind.title, detail: kind.detail,
+                  symbol: kind.symbol, role: kind.iconRole, keywords: "内网穿透 隧道 代理",
+                  route: .tunnel(kind))
+        }.filter(matches)
+    }
 
     var body: some View {
         LuckyPage(spacing: LuckyTheme.Space.section) {
-            LuckySearchField(text: $search, placeholder: "搜索服务")
+            LuckyScreenHeader(title: "服务", subtitle: "网络、容器与隧道，集中管理") {
+                LuckyIconTile(symbol: "square.grid.2x2", size: 48, glyph: 21, role: .neutral)
+            }
+            LuckySearchField(text: $search, placeholder: "搜索服务、隧道或工具")
 
-            if !hasResults {
+            if management.isEmpty, tunnels.isEmpty, !matches(Self.toolsEntry) {
                 LuckyEmptyState(symbol: LuckySymbol.search, title: "没有匹配的服务",
                                 message: "尝试搜索 Docker、证书或隧道名称")
-            } else if horizontalSizeClass == .regular {
-                HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
-                    if hasManagementMatches { managementSection }
-                    if !filteredTunnelKinds.isEmpty { tunnelSection }
-                }
             } else {
-                if hasManagementMatches { managementSection }
-                if !filteredTunnelKinds.isEmpty { tunnelSection }
+                if horizontalSizeClass == .regular, !dynamicTypeSize.isAccessibilitySize {
+                    HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
+                        if !management.isEmpty {
+                            group("服务管理", detail: "网络与自动化", entries: management)
+                        }
+                        if !tunnels.isEmpty {
+                            group("内网穿透", detail: "隧道与远程连接", entries: tunnels)
+                        }
+                    }
+                } else {
+                    if !management.isEmpty {
+                        group("服务管理", detail: "网络与自动化", entries: management)
+                    }
+                    if !tunnels.isEmpty {
+                        group("内网穿透", detail: "隧道与远程连接", entries: tunnels)
+                    }
+                }
+                if matches(Self.toolsEntry) {
+                    group("更多工具", detail: "", entries: [Self.toolsEntry])
+                }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private var managementSection: some View {
+    private func group(_ title: String, detail: String, entries: [Entry]) -> some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckySectionHeader(title: "服务管理", subtitle: "网络、容器与自动化",
-                               symbol: "square.grid.2x2.fill", iconRole: .neutral)
-            LuckyTileGrid(minimum: 145, spacing: LuckyTheme.Space.m) {
-                if matches("反向代理 Web TLS 域名 监听") {
-                    ServiceCompactTile(symbol: "globe.asia.australia", label: "反向代理",
-                                       detail: "代理与 TLS",
-                                       iconRole: LuckyServiceKind.webservice.iconRole) {
-                        navigator.push(.webservice)
-                    }
-                }
-                if matches("Docker 容器 镜像 网络 存储") {
-                    ServiceCompactTile(symbol: "shippingbox", label: "Docker",
-                                       detail: "容器与镜像",
-                                       iconRole: LuckyServiceKind.docker.iconRole) {
-                        navigator.push(.docker())
-                    }
-                }
-                if matches("动态域名 DDNS 域名解析") {
-                    ServiceCompactTile(symbol: "arrow.triangle.2.circlepath", label: "动态域名",
-                                       detail: "域名解析",
-                                       iconRole: LuckyServiceKind.ddns.iconRole) {
-                        navigator.push(.service(.ddns))
-                    }
-                }
-                if matches("SSL 证书 HTTPS 续期") {
-                    ServiceCompactTile(symbol: "checkmark.shield", label: "SSL 证书",
-                                       detail: "证书续期",
-                                       iconRole: LuckyServiceKind.ssl.iconRole) {
-                        navigator.push(.service(.ssl))
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private var tunnelSection: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckySectionHeader(title: "内网穿透", subtitle: "隧道与代理",
-                               symbol: "point.3.connected.trianglepath.dotted", iconRole: .tunnels)
-            LuckyCard(padding: 0, spacing: 0) {
-                ForEach(filteredTunnelKinds) { kind in
-                    if let first = filteredTunnelKinds.first, kind != first {
-                        LuckyHairline()
-                            .padding(.leading, LuckyTheme.Space.cardInset + 38 + LuckyTheme.Space.m)
-                    }
-                    ServiceListRow(symbol: kind.symbol, label: kind.title, detail: kind.detail,
-                                   iconRole: kind.iconRole) {
-                        navigator.push(.tunnel(kind))
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private func matches(_ haystack: String) -> Bool {
-        let needle = search.jsTrimmed
-        return needle.isEmpty || haystack.range(of: needle, options: .caseInsensitive) != nil
-    }
-}
-
-private struct ServiceCompactTile: View {
-    var symbol: String
-    var label: String
-    var detail: String
-    var iconRole: LuckyIconRole
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-                HStack {
-                    LuckyIconTile(symbol: symbol, size: 40, glyph: 18, role: iconRole)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(LuckyTheme.textTertiary)
-                        .accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
-                    Text(label)
-                        .font(LuckyTheme.Text.cardTitle)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                    Text(detail)
-                        .font(LuckyTheme.Text.caption)
-                        .foregroundStyle(LuckyTheme.textTertiary)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
-        }
-        .buttonStyle(LuckyCardButtonStyle(radius: LuckyTheme.Radius.card))
-    }
-}
-
-private struct ServiceListRow: View {
-    var symbol: String
-    var label: String
-    var detail: String
-    var iconRole: LuckyIconRole
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: LuckyTheme.Space.m) {
-                LuckyIconTile(symbol: symbol, size: 38, glyph: 17, role: iconRole)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(label).font(LuckyTheme.Text.cardTitle)
-                    Text(detail)
-                        .font(LuckyTheme.Text.caption)
-                        .foregroundStyle(LuckyTheme.textSecondary)
-                        .lineLimit(1)
-                }
-                .foregroundStyle(LuckyTheme.textPrimary)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+            LuckySectionHeader(title: title, subtitle: detail) {
+                Text("\(entries.count) 项")
+                    .font(LuckyTheme.Text.caption)
                     .foregroundStyle(LuckyTheme.textTertiary)
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.m)
-            .frame(minHeight: 68)
-            .contentShape(Rectangle())
+            .padding(.horizontal, LuckyTheme.Space.xs)
+            LuckyCard(padding: 0, spacing: 0) {
+                ForEach(entries) { entry in
+                    if entry.id != entries.first?.id {
+                        LuckyHairline().padding(.leading, LuckyTheme.Space.cardInset + 56)
+                    }
+                    Button { navigator.push(entry.route) } label: {
+                        HStack(spacing: LuckyTheme.Space.l) {
+                            LuckyIconTile(symbol: entry.symbol, size: 40, glyph: 19, role: entry.role)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(entry.title)
+                                    .font(LuckyTheme.Text.cardTitle)
+                                    .foregroundStyle(LuckyTheme.textPrimary)
+                                Text(entry.detail)
+                                    .font(LuckyTheme.Text.caption)
+                                    .foregroundStyle(LuckyTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(LuckyTheme.Text.captionMedium)
+                                .foregroundStyle(LuckyTheme.textTertiary)
+                                .accessibilityHidden(true)
+                        }
+                        .padding(LuckyTheme.Space.cardInset)
+                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func matches(_ entry: Entry) -> Bool {
+        let needle = search.jsTrimmed
+        return needle.isEmpty || "\(entry.title) \(entry.detail) \(entry.keywords) \(entry.id)"
+            .range(of: needle, options: .caseInsensitive) != nil
     }
 }
+
+#if DEBUG
+private struct ServicesScreenPreviews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            NavigationStack { ServicesScreen() }
+                .preferredColorScheme(.light).previewDisplayName("服务 · 浅色")
+            NavigationStack { ServicesScreen() }
+                .preferredColorScheme(.dark).previewDisplayName("服务 · 深色")
+            NavigationStack { ServicesScreen() }
+                .dynamicTypeSize(.accessibility2).previewDisplayName("服务 · 大字体")
+        }
+    }
+}
+#endif

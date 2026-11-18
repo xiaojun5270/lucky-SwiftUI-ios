@@ -148,12 +148,8 @@ extension WebEditorProxyList {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: open ? "chevron.up" : "chevron.down")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(LuckyTheme.textTertiary)
                     .frame(width: 24, height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(LuckyTheme.idle)
-                    )
             }
             .contentShape(Rectangle())
         }

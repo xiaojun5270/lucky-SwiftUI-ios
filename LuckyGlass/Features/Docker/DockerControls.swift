@@ -372,7 +372,8 @@ struct DockerPaneScroll<Content: View>: View {
             .padding(.horizontal, LuckyTheme.Space.gutter)
             .padding(.top, LuckyTheme.Space.pageTop)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: LuckyTheme.Layout.contentWidth)
+            .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
@@ -422,7 +423,8 @@ struct DockerListPane<Header: View, Rows: View>: View {
             .padding(.horizontal, LuckyTheme.Space.gutter)
             .padding(.top, LuckyTheme.Space.pageTop)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: LuckyTheme.Layout.contentWidth)
+            .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)

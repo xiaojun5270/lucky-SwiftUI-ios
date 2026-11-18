@@ -39,7 +39,7 @@ struct LuckyPillButton: View {
             button(iconPlate: false)
                 .buttonStyle(.glassProminent)
                 .tint(tone.tint)
-                .foregroundStyle(Color.white)
+                .foregroundStyle(LuckyTheme.textOnAccent)
         } else {
             button(iconPlate: true)
                 .buttonStyle(.glass)
@@ -80,7 +80,7 @@ struct LuckyGlassIconButton: View {
     var body: some View {
         Button(action: action) {
             LuckyIconTile(symbol: symbol, size: 40, glyph: 16,
-                          tone: prominent || tone != .brand ? tone : nil)
+                          tone: prominent || tone != .brand ? tone : nil, filled: prominent)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -155,10 +155,6 @@ struct LuckyGlassSegmentedControl<Value: Hashable>: View {
             }
             .padding(4)
             .background(Capsule(style: .continuous).fill(LuckyTheme.surfaceRaised))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(LuckyTheme.hairline, lineWidth: LuckyTheme.strokeWidth)
-            )
         }
         .sensoryFeedback(.selection, trigger: selection)
     }
@@ -180,11 +176,11 @@ struct LuckyGlassSegmentedControl<Value: Hashable>: View {
                 }
                 Text(segment.title).font(LuckyTheme.Text.captionMedium).lineLimit(1)
             }
-            .foregroundStyle(selected ? (glass ? tone.tint : Color.white)
-                                      : LuckyTheme.textSecondary)
+            .foregroundStyle(selected ? tone.tint : LuckyTheme.textSecondary)
             .padding(.horizontal, LuckyTheme.Space.m)
             .padding(.vertical, 7)
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 36)
             .background {
                 if selected {
                     if glass {
@@ -194,7 +190,7 @@ struct LuckyGlassSegmentedControl<Value: Hashable>: View {
                             .glassEffectID("indicator", in: indicator)
                     } else {
                         Capsule(style: .continuous)
-                            .fill(tone.tint)
+                            .fill(LuckyTheme.surface)
                             .matchedGeometryEffect(id: "indicator", in: indicator)
                     }
                 }

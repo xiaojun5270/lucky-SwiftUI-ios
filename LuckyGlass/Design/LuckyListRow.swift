@@ -66,12 +66,8 @@ struct LuckyListRow<Trailing: View>: View {
                 if showsChevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(LuckyTheme.idle)
-                        )
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .frame(width: 20, height: 24)
                 }
             }
             if !chips.isEmpty {

@@ -43,6 +43,8 @@ struct LuckyLoadGauge: View {
                     Text(displayValue)
                         .font(LuckyTheme.Text.metricSmall)
                         .foregroundStyle(LuckyTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("%")
@@ -55,7 +57,7 @@ struct LuckyLoadGauge: View {
             Text(label)
                 .font(LuckyTheme.Text.captionMedium)
                 .foregroundStyle(LuckyTheme.textSecondary)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
         .animation(LuckyTheme.Motion.snap, value: progress)

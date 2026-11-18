@@ -7,8 +7,7 @@ enum LuckyIconRole: String, CaseIterable, Sendable {
     case system, server, network, storage, automation, media, settings, logs, account, tools, neutral
     case create, start, edit
 
-    /// Opaque plates keep white symbols legible in both appearances. These are deliberately
-    /// darker than the text accents, which become lighter in dark mode.
+    /// Function colours tint the glyph and its soft plate independently of status.
     var color: Color {
         switch self {
         case .web: Self.purple
@@ -26,10 +25,7 @@ enum LuckyIconRole: String, CaseIterable, Sendable {
         }
     }
 
-    /// The plates carry more chroma than the old set, which had drifted muddy — a desaturated
-    /// mid-tone reads as dirty rather than calm, and thirty of them in a list made the whole
-    /// screen look dusty. Every value is still dark enough that a white semibold glyph clears
-    /// 3:1 against it, which is the large-text contrast floor these tiles have to meet.
+    /// Shared hues keep each function recognisable across lists, forms and shortcuts.
     private static let purple = LuckyTheme.dynamic(light: 0x6D4FC7, dark: 0x7B5FD3)
     private static let blue = LuckyTheme.dynamic(light: 0x2472DE, dark: 0x2F7FE8)
     private static let teal = LuckyTheme.dynamic(light: 0x0E8C82, dark: 0x12998E)

@@ -17,7 +17,8 @@ struct WebPaneScroll<Content: View>: View {
                 .padding(.horizontal, LuckyTheme.Space.gutter)
                 .padding(.top, LuckyTheme.Space.pageTop)
                 .padding(.bottom, LuckyTheme.Space.pageBottom)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: LuckyTheme.Layout.contentWidth)
+                .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
@@ -96,7 +97,7 @@ struct WebInlineActionButton: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(prominent ? Color.white : LuckyTheme.textPrimary)
+            .foregroundStyle(prominent ? LuckyTheme.textOnAccent : LuckyTheme.textPrimary)
             .padding(.horizontal, prominent ? 14 : 10)
             .frame(maxWidth: expands ? .infinity : nil,
                    minHeight: LuckyTheme.Space.touchTarget)

@@ -2,10 +2,7 @@ import SwiftUI
 
 /// `app/login.tsx`.
 ///
-/// The zod schema becomes `validate()` below — same four rules, same Chinese messages, same
-/// behaviour of validating every field before the first request goes out. The one visual change is
-/// that the 登录 button moved from inside the card to a glass bar in the bottom safe area: the card
-/// scrolls, and glass must not.
+/// Connection, credentials and the primary action stay together in one keyboard-aware scroll view.
 struct LoginScreen: View {
     private enum Field: Hashable { case baseUrl, account, password, twoFACode }
 
@@ -14,6 +11,7 @@ struct LoginScreen: View {
     @State private var failure = ""
     @State private var submitting = false
     @State private var seeded = false
+    @State private var twoFAExpanded = false
 
     var body: some View {
         ZStack {
@@ -21,30 +19,24 @@ struct LoginScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: LuckyTheme.Space.xl) {
                     header
-                    VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-                        LuckySectionHeader(title: "连接信息", subtitle: "Lucky 管理端",
-                                           symbol: "server.rack")
-                        card
-                    }
+                    card
+                        .disabled(submitting)
+                    loginButton
+                    Label("登录凭据安全保存在此设备的钥匙串中", systemImage: "lock.shield")
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
                 }
-                .frame(maxWidth: 520)
+                .frame(maxWidth: LuckyTheme.Layout.formWidth)
                 .padding(.horizontal, LuckyTheme.Space.xl)
-                .padding(.top, LuckyTheme.Space.xl)
+                .padding(.top, LuckyTheme.Space.xxl)
                 .padding(.bottom, LuckyTheme.Space.pageBottom)
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
-        }
-        .luckyActionBar {
-            LuckyPillButton(
-                title: submitting ? "正在登录" : "登录",
-                symbol: "arrow.right.to.line",
-                prominent: true,
-                loading: submitting,
-                action: submit
-            )
         }
         .task {
             // `defaultValues: { baseUrl: luckySessionState.baseUrl, … }` — read once, so typing is
@@ -59,38 +51,41 @@ struct LoginScreen: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.l) {
-            HStack(spacing: LuckyTheme.Space.l) {
-                LuckyMark(size: 68)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("LUCKY CONSOLE")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(LuckyTheme.accent)
-                    Text("连接 Lucky")
-                        .font(LuckyTheme.Text.hero)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                    Text("管理控制台")
-                        .font(LuckyTheme.Text.body)
-                        .foregroundStyle(LuckyTheme.textSecondary)
-                }
+        VStack(spacing: LuckyTheme.Space.l) {
+            LuckyMark(size: 80)
+            VStack(spacing: LuckyTheme.Space.s) {
+                Text("连接到 Lucky")
+                    .font(LuckyTheme.Text.hero)
+                    .foregroundStyle(LuckyTheme.textPrimary)
+                Text("你的服务器，尽在掌握。")
+                    .font(LuckyTheme.Text.body)
+                    .foregroundStyle(LuckyTheme.textSecondary)
             }
-            Capsule(style: .continuous)
-                .fill(LuckyTheme.accent)
-                .frame(width: 48, height: 4)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, LuckyTheme.Space.s)
     }
 
     private var card: some View {
-        LuckyCard(padding: LuckyTheme.Space.l, spacing: LuckyTheme.Space.l) {
+        LuckyCard(spacing: LuckyTheme.Space.l) {
             field(.baseUrl, "服务地址", "http://192.168.1.2:16601", "link",
                   keyboard: .URL, contentType: .URL)
+            LuckyHairline().padding(.vertical, LuckyTheme.Space.xs)
             field(.account, "管理员账号", "admin", "person",
                   contentType: .username)
             field(.password, "密码", "输入密码", "lock",
                   contentType: .password, secure: true)
-            field(.twoFACode, "2FA 验证码（可选）", "6位动态验证码", "key",
-                  keyboard: .numberPad, contentType: .oneTimeCode)
+            DisclosureGroup(isExpanded: $twoFAExpanded) {
+                field(.twoFACode, "2FA 验证码", "6 位动态验证码", "key",
+                      keyboard: .numberPad, contentType: .oneTimeCode)
+                    .padding(.top, LuckyTheme.Space.m)
+            } label: {
+                Text("双重验证（可选）")
+                    .font(LuckyTheme.Text.label)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .frame(minHeight: LuckyTheme.Space.touchTarget, alignment: .leading)
+            }
             if !failure.isEmpty {
                 Text(failure)
                     .font(LuckyTheme.Text.body)
@@ -100,6 +95,22 @@ struct LoginScreen: View {
                     .background(ConcentricRectangle().fill(LuckyTheme.dangerSoft))
             }
         }
+    }
+
+    private var loginButton: some View {
+        Button(action: submit) {
+            HStack(spacing: LuckyTheme.Space.s) {
+                if submitting { ProgressView().tint(LuckyTheme.textOnAccent) }
+                Text(submitting ? "正在连接…" : "连接服务器")
+                    .font(LuckyTheme.Text.button)
+                if !submitting { Image(systemName: "arrow.right") }
+            }
+            .foregroundStyle(LuckyTheme.textOnAccent)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(LuckyTheme.accent, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
+        }
+        .buttonStyle(.plain)
+        .disabled(submitting)
     }
 
     @ViewBuilder
@@ -120,10 +131,11 @@ struct LoginScreen: View {
                 symbol: symbol,
                 secure: secure,
                 keyboard: keyboard,
+                autocapitalization: .never,
                 contentType: contentType,
-                submitLabel: field == .twoFACode ? .go : .next,
+                submitLabel: field == .twoFACode || (field == .password && !twoFAExpanded) ? .go : .next,
                 tone: errors[field] == nil ? nil : .danger,
-                onSubmit: field == .twoFACode ? submit : nil
+                onSubmit: field == .twoFACode || (field == .password && !twoFAExpanded) ? submit : nil
             )
             if let message = errors[field] {
                 Text(message)
@@ -177,6 +189,7 @@ struct LoginScreen: View {
         failure = ""
         let found = validate()
         errors = found
+        if found[.twoFACode] != nil { twoFAExpanded = true }
         guard found.isEmpty else { return }
         submitting = true
         Task {
@@ -197,6 +210,17 @@ struct LoginScreen: View {
         }
     }
 }
+
+#if DEBUG
+private struct LoginScreenPreviews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            LoginScreen().preferredColorScheme(.light).previewDisplayName("登录 · 浅色")
+            LoginScreen().preferredColorScheme(.dark).previewDisplayName("登录 · 深色")
+        }
+    }
+}
+#endif
 
 extension Character {
     /// `/\D/` and `/^\d{6}$/` match ASCII digits only — `isNumber` would also accept 一 and ٤.

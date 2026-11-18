@@ -365,12 +365,8 @@ extension ServiceAdvancedSheet {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: clientsOpen ? "chevron.up" : "chevron.down")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(LuckyTheme.textTertiary)
                         .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(LuckyTheme.idle)
-                        )
                 }
                 .frame(minHeight: 42)
             }

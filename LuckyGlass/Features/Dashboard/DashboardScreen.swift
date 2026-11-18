@@ -78,10 +78,11 @@ private struct DashboardLiveReader<Content: View>: View {
     }
 }
 
-/// The dashboard's first panel: one dense read of the host instead of separate same-weight cards.
+/// Live resource gauges lead; process details stay secondary in a quiet footer.
 private struct DashboardHostPanel: View {
     var status: LuckyLiveStatus?
     var connected: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var memory: Double {
         guard let status else { return 0 }
@@ -91,12 +92,11 @@ private struct DashboardHostPanel: View {
     var body: some View {
         LuckyCard(padding: 0, spacing: 0) {
             HStack(spacing: LuckyTheme.Space.m) {
-                LuckyIconTile(symbol: "server.rack", size: 42, glyph: 19, role: .server)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("主机状态")
-                        .font(.system(size: 18, weight: .bold))
+                    Text("运行状态")
+                        .font(LuckyTheme.Text.cardTitle)
                         .foregroundStyle(LuckyTheme.textPrimary)
-                    Text(connected ? "实时状态流已连接" : "正在连接状态流")
+                    Text(connected ? "实时资源使用情况" : "等待状态流连接")
                         .font(LuckyTheme.Text.caption)
                         .foregroundStyle(LuckyTheme.textSecondary)
                 }
@@ -107,11 +107,9 @@ private struct DashboardHostPanel: View {
             }
             .padding(LuckyTheme.Space.cardInset)
 
-            LuckyHairline()
-
-            HStack(alignment: .center, spacing: 0) {
+            resourceLayout {
                 LuckyLoadGauge(label: "系统 CPU", value: status?.usedCpu)
-                gaugeDivider
+                if !dynamicTypeSize.isAccessibilitySize { gaugeDivider }
                 LuckyLoadGauge(label: "系统内存", value: status == nil ? nil : memory)
             }
             .padding(.horizontal, LuckyTheme.Space.l)
@@ -119,30 +117,38 @@ private struct DashboardHostPanel: View {
 
             LuckyHairline()
 
-            HStack(spacing: 0) {
+            processLayout {
                 metric("进程 CPU",
-                       status.map { JSCompat.toFixed($0.currentProcessUsedCpu, 1) + "%" } ?? "--",
-                       tone: .brand)
-                metricDivider
-                metric("进程内存", status.map { Format.bytes($0.processUsedMem) } ?? "--",
-                       tone: .info)
-                metricDivider
-                metric("协程数", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--",
-                       tone: .warning)
+                       status.map { JSCompat.toFixed($0.currentProcessUsedCpu, 1) + "%" } ?? "--")
+                if !dynamicTypeSize.isAccessibilitySize { metricDivider }
+                metric("进程内存", status.map { Format.bytes($0.processUsedMem) } ?? "--")
+                if !dynamicTypeSize.isAccessibilitySize { metricDivider }
+                metric("协程数", status.map { JSONSerializer.numberString($0.goroutine) } ?? "--")
             }
             .padding(.vertical, LuckyTheme.Space.m)
-            .background(LuckyTheme.surfaceRaised)
         }
     }
 
-    private func metric(_ label: String, _ value: String, tone: LuckyTone) -> some View {
+    private var resourceLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.xl))
+            : AnyLayout(HStackLayout(spacing: 0))
+    }
+
+    private var processLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.m))
+            : AnyLayout(HStackLayout(spacing: 0))
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .center, spacing: 4) {
             Text(label)
-                .font(.system(size: 10, weight: .bold))
+                .font(LuckyTheme.Text.caption)
                 .foregroundStyle(LuckyTheme.textTertiary)
             Text(value)
-                .font(LuckyTheme.Text.metricSmall)
-                .foregroundStyle(tone.tint)
+                .font(LuckyTheme.Text.bodyMedium)
+                .foregroundStyle(LuckyTheme.textPrimary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
@@ -161,36 +167,68 @@ private struct DashboardHostPanel: View {
     }
 }
 
-private struct DashboardRouteButton: View {
+private struct DashboardQuickLink: View {
     var title: String
-    var detail: String
     var symbol: String
     var iconRole: LuckyIconRole
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                LuckyIconTile(symbol: symbol, size: 36, glyph: 16, role: iconRole)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(LuckyTheme.Text.captionMedium)
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundStyle(LuckyTheme.textTertiary)
-                        .lineLimit(1)
-                }
-                .foregroundStyle(LuckyTheme.textPrimary)
-                Spacer(minLength: 0)
+            VStack(spacing: LuckyTheme.Space.s) {
+                LuckyIconTile(symbol: symbol, size: 46, glyph: 21, role: iconRole)
+                Text(title)
+                    .font(LuckyTheme.Text.captionMedium)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(LuckyTheme.textPrimary)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .background(LuckyTheme.surface, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
-            .overlay {
-                RoundedRectangle(cornerRadius: LuckyTheme.Radius.panel, style: .continuous)
-                    .strokeBorder(LuckyTheme.hairline, lineWidth: LuckyTheme.strokeWidth)
-            }
+            .frame(maxWidth: .infinity, minHeight: 82)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct DashboardShortcuts: View {
+    @Environment(\.luckyNavigator) private var navigator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
+              count: dynamicTypeSize >= .xxLarge ? 2 : 4)
+    }
+
+    var body: some View {
+        LuckyCard(spacing: LuckyTheme.Space.l) {
+            LuckySectionHeader(title: "快捷入口") {
+                Button {
+                    navigator.selection = .services
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("全部服务")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(LuckyTheme.Text.captionMedium)
+                    .frame(minHeight: LuckyTheme.Space.touchTarget)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(LuckyTheme.accent)
+            }
+            LazyVGrid(columns: columns, spacing: LuckyTheme.Space.s) {
+                DashboardQuickLink(title: "反向代理", symbol: "globe.asia.australia", iconRole: .web) {
+                    navigator.push(.webservice)
+                }
+                DashboardQuickLink(title: "Docker", symbol: "shippingbox", iconRole: .docker) {
+                    navigator.push(.docker())
+                }
+                DashboardQuickLink(title: "动态域名", symbol: "arrow.triangle.2.circlepath", iconRole: .ddns) {
+                    navigator.push(.service(.ddns))
+                }
+                DashboardQuickLink(title: "SSL 证书", symbol: "checkmark.shield", iconRole: .security) {
+                    navigator.push(.service(.ssl))
+                }
+            }
+        }
     }
 }
 
@@ -266,13 +304,9 @@ private struct ReverseProxyCard: View {
                     }
                     Spacer(minLength: LuckyTheme.Space.xs)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(LuckyTheme.idle)
-                        )
+                        .font(LuckyTheme.Text.captionMedium)
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .frame(width: 24, height: 44)
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
@@ -284,20 +318,13 @@ private struct ReverseProxyCard: View {
     }
 
     private var maskToggle: some View {
-        Button {
+        LuckyToolbarButton(
+            symbol: portsMasked ? "eye" : "eye.slash",
+            label: portsMasked ? "显示端口信息" : "隐藏端口信息",
+            tone: portsMasked ? .brand : .idle
+        ) {
             portsMasked.toggle()
-        } label: {
-            Image(systemName: portsMasked ? "eye" : "eye.slash")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(portsMasked ? LuckyTheme.accent : LuckyTheme.idle)
-                )
         }
-        .buttonStyle(DashboardPressStyle())
-        .accessibilityLabel(portsMasked ? "显示端口信息" : "隐藏端口信息")
         .accessibilityAddTraits(portsMasked ? [.isSelected] : [])
     }
 
@@ -308,9 +335,9 @@ private struct ReverseProxyCard: View {
             statColumn("启用规则", ready ? "\(enabledRules.count)/\(rules.count)" : "--",
                        tint: LuckyTheme.accent, divided: false)
             statColumn("启用子规则", ready ? "\(enabledSubRules.count)/\(subRules.count)" : "--",
-                       tint: LuckyTheme.success, divided: true)
+                       tint: LuckyTheme.textPrimary, divided: true)
             statColumn("TLS 监听", ready ? String(tlsRules.count) : "--",
-                       tint: LuckyTheme.warning, divided: true)
+                       tint: LuckyTheme.textPrimary, divided: true)
         }
         .frame(minHeight: 66)
         .background(ConcentricRectangle().fill(LuckyTheme.surfaceRaised))
@@ -389,6 +416,8 @@ struct DashboardScreen: View {
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var session = LuckySession.shared
 
     @State private var rules: [LuckyListItem] = []
     @State private var rulesReady = false
@@ -402,24 +431,23 @@ struct DashboardScreen: View {
 
     var body: some View {
         LuckyPage(spacing: LuckyTheme.Space.section, refresh: { await refreshAll() }) {
+            LuckyScreenHeader(title: "总览", subtitle: serverName) {
+                Button { navigator.selection = .settings } label: {
+                    LuckyMark(size: 46)
+                        .frame(width: 52, height: 52)
+                        .background(LuckyTheme.surface, in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("账户与设置")
+            }
             DashboardLiveReader { statusStore in
+                DashboardHostPanel(status: statusStore.data, connected: statusStore.connected)
                 if !statusStore.error.isEmpty, statusStore.data == nil {
                     LuckyErrorCard(message: statusStore.error)
                 }
-                DashboardHostPanel(status: statusStore.data, connected: statusStore.connected)
             }
 
-            HStack(spacing: LuckyTheme.Space.m) {
-                DashboardRouteButton(title: "Docker", detail: "容器与镜像",
-                                     symbol: LuckySymbol.docker, iconRole: .docker) {
-                    navigator.push(.docker())
-                }
-                DashboardRouteButton(title: "内网穿透", detail: "隧道与代理",
-                                     symbol: "point.3.connected.trianglepath.dotted",
-                                     iconRole: .tunnels) {
-                    navigator.reset(to: .services)
-                }
-            }
+            DashboardShortcuts()
 
             ReverseProxyCard(rules: rules, ready: rulesReady, loading: rulesFetching,
                              failure: rulesFailure) {
@@ -427,7 +455,7 @@ struct DashboardScreen: View {
             }
             DashboardLiveReader { statusStore in
                 if let status = statusStore.data {
-                    if horizontalSizeClass == .regular {
+                    if horizontalSizeClass == .regular, !dynamicTypeSize.isAccessibilitySize {
                         HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
                             systemPanel(status)
                             networkPanel(status)
@@ -443,6 +471,10 @@ struct DashboardScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .task(id: active) { await holdStatus() }
         .task(id: active) { await pollRules() }
+    }
+
+    private var serverName: String {
+        URL(string: session.baseUrl)?.host ?? "Lucky 服务器"
     }
 
     /// 系统资源 — `TrendChart maxValue={100}` over the socket's 90-sample history. The original
@@ -602,3 +634,35 @@ struct DashboardScreen: View {
         }
     }
 }
+
+#if DEBUG
+/// Uses the production cards with local sample data; opening Canvas does not connect to a server.
+private struct DashboardScreenPreviews: PreviewProvider {
+    private static let sample = LuckyLiveStatus(
+        totalMem: 8_589_934_592, usedMem: 3_350_074_490, usedCpu: 12.4,
+        currentProcessUsedCpu: 1.8, goroutine: 42, processUsedMem: 83_886_080
+    )
+
+    private static var overview: some View {
+        NavigationStack {
+            LuckyPage(spacing: LuckyTheme.Space.section) {
+                LuckyScreenHeader(title: "总览", subtitle: "lucky.local") {
+                    LuckyMark(size: 46)
+                }
+                DashboardHostPanel(status: sample, connected: true)
+                DashboardShortcuts()
+                ReverseProxyCard(rules: [], ready: true, loading: false, failure: "", open: {})
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    static var previews: some View {
+        Group {
+            overview.preferredColorScheme(.light).previewDisplayName("总览 · 浅色")
+            overview.preferredColorScheme(.dark).previewDisplayName("总览 · 深色")
+            overview.dynamicTypeSize(.accessibility2).previewDisplayName("总览 · 大字体")
+        }
+    }
+}
+#endif

@@ -40,24 +40,25 @@ struct LuckyLogView: View {
     var height: CGFloat? = 380
     /// Draws from the tail without allocating a reversed copy of the full log buffer.
     var newestFirst: Bool = false
+    var fill: Color = LuckyTheme.surfaceSunken
 
     private static let bottomAnchor = "lucky.log.bottom"
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 3) {
+                LazyVStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
                     rows(query.jsTrimmed)
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
                 }
-                .padding(LuckyTheme.Space.m)
+                .padding(LuckyTheme.Space.l)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
             }
             .frame(height: height)
-            .background(ConcentricRectangle().fill(LuckyTheme.surfaceSunken))
+            .background(ConcentricRectangle().fill(fill))
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: lines.count) {
                 guard follows else { return }
@@ -89,12 +90,12 @@ private struct LuckyLogLine: View, Equatable {
     var body: some View {
         if needle.isEmpty {
             Text(verbatim: line)
-                .font(LuckyTheme.Text.codeSmall)
+                .font(LuckyTheme.Text.code)
                 .foregroundStyle(Self.tone(line)?.tint ?? LuckyTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(attributed(line, needle: needle))
-                .font(LuckyTheme.Text.codeSmall)
+                .font(LuckyTheme.Text.code)
                 .foregroundStyle(Self.tone(line)?.tint ?? LuckyTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

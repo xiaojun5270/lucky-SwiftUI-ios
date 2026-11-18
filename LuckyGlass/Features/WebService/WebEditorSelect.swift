@@ -98,18 +98,18 @@ extension WebSelect {
                 HStack(spacing: 9) {
                     Text(option.label)
                         .font(.system(size: 13, weight: active ? .bold : .medium, design: .rounded))
-                        .foregroundStyle(active ? Color.white : LuckyTheme.textPrimary)
+                        .foregroundStyle(active ? LuckyTheme.accent : LuckyTheme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if active {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.white)
+                            .foregroundStyle(LuckyTheme.accent)
                     }
                 }
                 .padding(.horizontal, LuckyTheme.Space.m)
                 .frame(minHeight: 42)
             }
-            .background(active ? LuckyTheme.accent : LuckyTheme.surface)
+            .background(active ? LuckyTheme.accentSoft : LuckyTheme.surface)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -177,7 +177,7 @@ extension WebListenTypes {
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(LuckyTheme.textOnAccent)
                 }
             }
             .frame(width: 18, height: 18)

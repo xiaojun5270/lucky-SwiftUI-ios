@@ -7,6 +7,7 @@ import SwiftUI
 /// system chrome (nav bar, tab bar) and from whatever the screen puts in a `safeAreaBar`.
 struct LuckyPage<Content: View>: View {
     var spacing: CGFloat = LuckyTheme.Space.stack
+    var maxWidth: CGFloat = LuckyTheme.Layout.contentWidth
     /// Pull-to-refresh. Most screens have a refresh action; the login screen does not.
     var refresh: (@Sendable () async -> Void)?
     @ViewBuilder var content: () -> Content
@@ -33,13 +34,86 @@ struct LuckyPage<Content: View>: View {
                 .padding(.horizontal, LuckyTheme.Space.gutter)
                 .padding(.top, LuckyTheme.Space.pageTop)
                 .padding(.bottom, LuckyTheme.Space.pageBottom)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: maxWidth)
+                .frame(maxWidth: .infinity)
         }
         // Soft at the top so cards dissolve under the title; hard at the bottom so a list does not
         // smear into the tab bar while scrolling.
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollDismissesKeyboard(.interactively)
         .scrollIndicators(.hidden)
+    }
+}
+
+/// A consistent page identity for the four primary tabs. The vertical alternative preserves
+/// space for the title and controls at accessibility text sizes and narrow split-view widths.
+struct LuckyScreenHeader<Trailing: View>: View {
+    var title: String
+    var subtitle: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: LuckyTheme.Space.l) {
+                heading
+                Spacer(minLength: LuckyTheme.Space.m)
+                trailing()
+            }
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
+                heading
+                trailing()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, LuckyTheme.Space.xs)
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            Text(title)
+                .font(LuckyTheme.Text.hero)
+                .foregroundStyle(LuckyTheme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Text(subtitle)
+                .font(LuckyTheme.Text.body)
+                .foregroundStyle(LuckyTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+extension LuckyScreenHeader where Trailing == EmptyView {
+    init(title: String, subtitle: String) {
+        self.init(title: title, subtitle: subtitle) { EmptyView() }
+    }
+}
+
+/// Quiet utility controls used in page headers and list toolbars.
+struct LuckyToolbarButton: View {
+    var symbol: String
+    var label: String
+    var tone: LuckyTone = .idle
+    var loading: Bool = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if loading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: symbol)
+                        .font(.system(size: 17, weight: .medium))
+                }
+            }
+            .foregroundStyle(tone.tint)
+            .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
+            .background(LuckyTheme.surface, in: .circle)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(loading)
+        .accessibilityLabel(label)
     }
 }
 

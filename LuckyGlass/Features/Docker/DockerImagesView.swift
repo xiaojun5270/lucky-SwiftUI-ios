@@ -281,7 +281,7 @@ private struct DockerImageCard: View {
                     if selected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 15, weight: .heavy))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(LuckyTheme.textOnAccent)
                     }
                 }
                 .frame(width: 44, height: 44)

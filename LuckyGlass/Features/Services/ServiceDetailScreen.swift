@@ -383,12 +383,8 @@ struct ServiceDetailScreen: View {
                               tone: ServiceRecord.isHealthyStatus(status) ? .ok : .idle)
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(LuckyTheme.textTertiary)
                         .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(LuckyTheme.idle)
-                        )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
