@@ -16,11 +16,17 @@ struct SettingsScreen: View {
             connection
             security
             sessionActions
-            Text("LuckyGlass · Lucky 的原生管理客户端")
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textTertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, LuckyTheme.Space.s)
+            VStack(spacing: LuckyTheme.Space.xs) {
+                Text("LuckyGlass · Lucky 的原生管理客户端")
+                Text(LuckyAppVersion.displayString)
+                    .monospacedDigit()
+                    .textSelection(.enabled)
+            }
+            .font(LuckyTheme.Text.caption)
+            .foregroundStyle(LuckyTheme.textTertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, LuckyTheme.Space.s)
         }
         .toolbar(.hidden, for: .navigationBar)
         .alert("退出登录", isPresented: $confirming) {

@@ -624,7 +624,8 @@ enum DockerService {
         )
     }
 
-    /// `checkDockerContainerUpgrade(id)` — one registry round trip, hence a minute.
+    /// Legacy container check, kept for servers that expose it. Native container updates use
+    /// the same image check and image upgrade APIs as the Lucky 2.27.2 web interface.
     static func checkContainerUpgrade(_ id: String) async throws -> JSONValue {
         try await call("containers/\(LuckyQuery.escape(id))/upgrade-check", timeout: 60)
     }
@@ -632,9 +633,15 @@ enum DockerService {
     /// `upgradeDockerContainer(id, data)` — pull, stop, recreate.
     @discardableResult
     static func upgradeContainer(_ id: String, _ data: JSONValue) async throws -> JSONValue {
-        try await call(
-            "containers/\(LuckyQuery.escape(id))/upgrade", "POST", body: .value(data), timeout: 300
-        )
+        let path = "containers/\(LuckyQuery.escape(id))/upgrade"
+        do {
+            return try await call(path, "POST", body: .value(data), timeout: 300)
+        } catch {
+            if DockerAPICompatibility.isUnavailableRoute(error, method: "POST", path: "/api/docker/\(path)") {
+                throw DockerAPICompatibility.unsupported("容器更新")
+            }
+            throw error
+        }
     }
 
     // MARK: - Container file browser
@@ -977,14 +984,29 @@ enum DockerService {
         )
     }
 
-    /// `checkDockerImageUpgrade(imageRef)` — one registry manifest fetch, which is slow enough to
-    /// warrant 45 s but not slow enough to deserve a task.
-    static func checkImageUpgrade(_ imageRef: String) async throws -> JSONValue {
-        try await call(
-            "images/upgrade-check", "POST",
-            body: .value(.object([("image_ref", .string(imageRef))])),
-            timeout: 45
-        )
+    /// Match the web interface's image check socket, including progress and heartbeat messages.
+    /// Servers without that socket can use the documented image HTTP check instead.
+    static func checkImageUpgrade(
+        _ imageRef: String,
+        onProgress: (@Sendable (DockerImageUpgradeProgress) -> Void)? = nil
+    ) async throws -> JSONValue {
+        do {
+            return try await client.checkDockerImageUpgrade(imageRef, onProgress: onProgress)
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "GET",
+                path: "/api/docker/images/upgrade-check-ws") else { throw error }
+        }
+        do {
+            let result = try await call("images/upgrade-check", "POST",
+                body: .value(.object([("image_ref", .string(imageRef))])), timeout: 120)
+            _ = try DockerImageUpgradeCheck(result)
+            return result
+        } catch {
+            if DockerAPICompatibility.isUnavailableRoute(error, method: "POST", path: "/api/docker/images/upgrade-check") {
+                throw DockerAPICompatibility.unsupported("镜像更新检查")
+            }
+            throw error
+        }
     }
 
     /// `getDockerImageUpgradeStatus(imageRef)` — the cached verdicts. An empty reference asks for

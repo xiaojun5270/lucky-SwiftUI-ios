@@ -317,19 +317,12 @@ extension DockerScreen {
         }
     }
 
-    /// §10's 更新 verb. The upgrade check answers with the daemon's envelope wrapped around the new
-    /// configuration, so the two envelope fields come off before the form sees it.
+    /// The update sheet owns image checking, confirmation, pulling and the single-container update.
     func updateContainer(_ key: String, _ name: String) async {
         localError = ""
-        do {
-            let result = try await DockerService.checkContainerUpgrade(key)
-            var value = DockerRecord.nested(result, ["config", "upgrade", "result", "data"])
-            value.removeValue(forKey: "ret")
-            value.removeValue(forKey: "msg")
-            openEditor(.containerUpgrade, title: "更新容器 \(name)", value: .object(value), key: key)
-        } catch {
-            localError = error.luckyMessage("检查容器更新失败")
-        }
+        localNotice = ""
+        openEditor(.containerUpgrade, title: "更新容器 \(name)",
+                   value: .object([("container_name", .string(name))]), key: key)
     }
 }
 

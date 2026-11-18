@@ -32,6 +32,9 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
+      - name: Check Docker API compatibility
+        run: bash Tests/DockerAPICompatibility/run.sh
+
       - name: Inspect project
         run: |
           set -euo pipefail
@@ -41,6 +44,12 @@ jobs:
       - name: Build unsigned app
         run: |
           set -euo pipefail
+          BASE_BUILD_NUMBER="$(awk -F '[[:space:]]*=[[:space:]]*' '$1 == "CURRENT_PROJECT_VERSION" { print $2; exit }' Version.xcconfig)"
+          if ! [[ "$BASE_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Version.xcconfig must define a numeric CURRENT_PROJECT_VERSION."
+            exit 1
+          fi
+          CI_BUILD_NUMBER="$((BASE_BUILD_NUMBER + GITHUB_RUN_NUMBER))"
           set +e
           xcodebuild \
             -project LuckyGlass.xcodeproj \
@@ -49,6 +58,7 @@ jobs:
             -sdk iphoneos \
             -destination generic/platform=iOS \
             -derivedDataPath build/DerivedData \
+            CURRENT_PROJECT_VERSION="$CI_BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -61,6 +71,7 @@ jobs:
           exit "$XCODEBUILD_EXIT"
 
       - name: Package unsigned IPA
+        id: package
         run: |
           set -euo pipefail
           APP_PATH="$(find build/DerivedData -path '*/Build/Products/*-iphoneos/*.app' -type d -print -quit)"
@@ -68,15 +79,22 @@ jobs:
             echo "No built .app found."
             exit 1
           fi
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          IPA_NAME="lucky-ios-${APP_VERSION}-build-${APP_BUILD}-unsigned.ipa"
           mkdir -p artifacts/Payload
           cp -R "$APP_PATH" artifacts/Payload/
-          (cd artifacts && ditto -c -k --sequesterRsrc --keepParent Payload lucky-ios-unsigned.ipa)
+          (cd artifacts && ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME")
+          echo "version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$APP_BUILD" >> "$GITHUB_OUTPUT"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+          echo "App 版本：${APP_VERSION}（构建 ${APP_BUILD}）" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: lucky-ios-unsigned-ipa
-          path: artifacts/lucky-ios-unsigned.ipa
+          name: lucky-ios-unsigned-ipa-v${{ steps.package.outputs.version }}-build-${{ steps.package.outputs.build }}
+          path: artifacts/${{ steps.package.outputs.ipa_name }}
           if-no-files-found: error
 
       - name: Upload build diagnostics

@@ -177,37 +177,47 @@ struct ContainerArtwork: View {
 
 // MARK: - 统计网格
 
-/// §5.2's `ContainerStatsGrid` — three tiles of two metrics, wrapping as the width allows.
+/// Six equal cells always fill complete rows. At the default text size, each column pairs a
+/// resource: CPU/memory, download/upload, and disk reads/writes.
 struct ContainerStatsGrid: View {
     var stats: DockerStatRow?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var columnCount: Int {
+        if dynamicTypeSize.isAccessibilitySize { return 1 }
+        return dynamicTypeSize >= .xxLarge ? 2 : 3
+    }
+
+    private var metrics: [Metric] {
+        let cpu = Metric("CPU", LuckySymbol.cpu, LuckyTheme.accent, self.cpu)
+        let memory = Metric("内存", LuckySymbol.memory, LuckyTheme.success, self.memory)
+        let download = Metric("下载", LuckySymbol.download, LuckyTheme.info,
+                              bytes(\.networkRx, \.hasNetworkRx))
+        let upload = Metric("上传", LuckySymbol.upload, LuckyTheme.warning,
+                            bytes(\.networkTx, \.hasNetworkTx))
+        let read = Metric("读取", "internaldrive.fill", LuckyTheme.textSecondary,
+                          bytes(\.blockRead, \.hasBlockRead))
+        let write = Metric("写入", "internaldrive", LuckyTheme.textSecondary,
+                           bytes(\.blockWrite, \.hasBlockWrite))
+        return columnCount == 3
+            ? [cpu, download, read, memory, upload, write]
+            : [cpu, memory, download, upload, read, write]
+    }
 
     var body: some View {
-        LuckyTileGrid(minimum: 145, spacing: 6) {
-            tile(
-                Metric("CPU", LuckySymbol.cpu, LuckyTheme.accent, cpu),
-                Metric("内存", LuckySymbol.memory, LuckyTheme.success, memory)
-            )
-            tile(
-                Metric("下载", LuckySymbol.download, LuckyTheme.info,
-                       bytes(\.networkRx, \.hasNetworkRx)),
-                Metric("上传", LuckySymbol.upload, LuckyTheme.warning,
-                       bytes(\.networkTx, \.hasNetworkTx))
-            )
-            tile(
-                Metric("读取", "internaldrive.fill", LuckyTheme.textSecondary,
-                       bytes(\.blockRead, \.hasBlockRead)),
-                Metric("写入", "internaldrive", LuckyTheme.textSecondary,
-                       bytes(\.blockWrite, \.hasBlockWrite))
-            )
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
+                                 count: columnCount), spacing: LuckyTheme.Space.s) {
+            ForEach(metrics) { cell($0) }
         }
     }
 
     /// One label-and-value pair.
-    private struct Metric {
+    private struct Metric: Identifiable {
         var label: String
         var symbol: String
         var tint: Color
         var value: String
+        var id: String { label }
 
         init(_ label: String, _ symbol: String, _ tint: Color, _ value: String) {
             self.label = label
@@ -217,42 +227,30 @@ struct ContainerStatsGrid: View {
         }
     }
 
-    private func tile(_ first: Metric, _ second: Metric) -> some View {
-        HStack(spacing: 0) {
-            cell(first)
-            // `borderLeftWidth: 1` on the second cell only.
-            Rectangle()
-                .fill(LuckyTheme.separator)
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
-            cell(second)
-        }
-        .frame(minHeight: 54)
-        .padding(LuckyTheme.Space.s)
-        .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
-    }
-
     private func cell(_ metric: Metric) -> some View {
-        VStack(spacing: LuckyTheme.Space.xs) {
+        VStack(spacing: LuckyTheme.Space.s) {
             HStack(spacing: LuckyTheme.Space.xs) {
-                LuckyFunctionIcon(symbol: metric.symbol, size: 21, glyph: 9,
-                                  color: metric.tint)
+                Image(systemName: metric.symbol)
+                    .font(LuckyTheme.Text.captionMedium)
+                    .foregroundStyle(metric.tint)
+                    .accessibilityHidden(true)
                 Text(metric.label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(LuckyTheme.Text.caption)
             }
             .foregroundStyle(LuckyTheme.textSecondary)
             Text(metric.value)
-                .font(.system(size: 11, weight: .bold))
+                .font(LuckyTheme.Text.bodyMedium.weight(.semibold))
                 .foregroundStyle(LuckyTheme.textPrimary)
                 .monospacedDigit()
                 .lineLimit(1)
-                // `adjustsFontSizeToFit` + `minimumFontScale 0.75`.
                 .minimumScaleFactor(0.75)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, LuckyTheme.Space.xs)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, LuckyTheme.Space.s)
+        .padding(.vertical, LuckyTheme.Space.m)
+        .frame(maxWidth: .infinity, minHeight: 72)
+        .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(metric.label) \(metric.value)")
     }
@@ -334,12 +332,12 @@ struct ContainerCommandButton: View {
             HStack(spacing: 5) {
                 LuckyFunctionIcon(symbol: symbol, size: 26, glyph: 12, color: tint)
                 Text(label)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(LuckyTheme.Text.label)
                     .lineLimit(1)
             }
             .foregroundStyle(LuckyTheme.textPrimary)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 42)
+            .frame(minHeight: LuckyTheme.Space.touchTarget)
             .background(LuckyTheme.surfaceRaised,
                         in: .rect(cornerRadius: LuckyTheme.Radius.row))
             .overlay {

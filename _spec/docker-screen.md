@@ -172,6 +172,13 @@ Fallback message when the error is not an `Error`: `Compose 操作失败`.
 - Used at `size={48}` in the containers list.
 
 ### 5.2 `ContainerStatsGrid({ stats?: DockerStatRow })`
+
+Native layout revision (2026-11-18): render six individual cells in three columns and two rows,
+pairing CPU/memory, download/upload and read/write vertically. Larger text uses two columns;
+accessibility text uses one. Every row is filled, avoiding an orphaned third pair and its empty
+neighbor. Labels and values use scalable type, retaining the missing/zero formatting below.
+The three paired tiles described next document the original source layout.
+
 Three tiles, each tile holds two metrics side-by-side. Outer: `row`, `flexWrap`, `gap 6`.
 Tile: `flexGrow 1, flexShrink 1, flexBasis 145, minWidth 132, minHeight 54, padding 8, borderRadius 12,
 backgroundColor colors.mutedCard`, `row`, centred vertically.
@@ -269,9 +276,12 @@ Icon `size 15`; label `fontSize 12`, `fontWeight "700"`, `numberOfLines 1`.
   failure → `读取 Dockerfile 失败`.
 - `editContainer(key)` → `getDockerContainer(key)`, editor `{ type:"container-edit", title:"编辑容器", key,
   value: nested(result, ["container","data"]) }`; failure → `读取容器配置失败`.
-- `updateContainer(key, name)` → `checkDockerContainerUpgrade(key)`, `value = {...nested(result,
-  ["config","upgrade","result","data"])}` with `ret` and `msg` **deleted**; editor
-  `{ type:"container-upgrade", title: `更新容器 ${name}`, key, value }`; failure → `检查容器更新失败`.
+- Native `updateContainer(key, name)` opens `DockerContainerUpgradeSheet`: inspect the container,
+  check its image with the Lucky 2.27.2 web client's image socket, and show check progress.
+  An available update requires confirmation before pulling with a backup tag and recreating only
+  the selected container through `images/upgrade-containers`. Keep the pulled image on a failed
+  recreation so retry does not lose the checked target. Closing a check cancels its socket;
+  pulling/recreation disables dismissal. Lucky's own running container is protected.
 
 ---
 
@@ -798,7 +808,8 @@ branch**. Net: **61 distinct `type` strings reach the mutation.** Grouped, with 
 `{repository,tag,author,comment,pause}` · `container-label-set` `{label}` · `container-label-remove` (key only) ·
 `container-group-set` `{container_name,group_key}` · `container-version-switch` `{target_image_ref}` ·
 `container-file-upload` `{path,file_name,file_uri}` · `container-files` `{operation,path}` ·
-`container-upgrade` (payload = upgrade-check result minus `ret`/`msg`) · `container-start` · `container-stop` ·
+`container-upgrade` (native uses the dedicated image-check and single-container update sheet described in §7;
+the source's generic form used the legacy check payload) · `container-start` · `container-stop` ·
 `container-restart` · `container-pause` · `container-unpause` (last five: key only, no `value`).
 
 **Images (10)** — `image-pull` `{image,tag,architecture}` · `image-remove` (key = first tag or id) ·

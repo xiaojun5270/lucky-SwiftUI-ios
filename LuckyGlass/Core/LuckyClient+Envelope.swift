@@ -46,7 +46,7 @@ extension LuckyClient {
         if kind == .blob, !contentType.contains("application/json"), !contentType.contains("+json") {
             if !ok {
                 let detail = data.count <= 65_536 ? String(decoding: data, as: UTF8.self).jsTrimmed : ""
-                throw LuckyError(detail.isEmpty ? httpFailure : detail)
+                throw LuckyError(detail.isEmpty ? httpFailure : detail, statusCode: response.statusCode)
             }
             // A small body may still be an error envelope rather than a file.
             if data.count <= 1_048_576, let parsed = JSONParser.tryParse(data) {
@@ -58,7 +58,7 @@ extension LuckyClient {
         if kind == .text || contentType.hasPrefix("text/")
             || contentType.contains("xml") || contentType.contains("yaml") {
             let raw = String(decoding: data, as: UTF8.self)
-            if !ok { throw LuckyError(raw.isEmpty ? httpFailure : raw) }
+            if !ok { throw LuckyError(raw.isEmpty ? httpFailure : raw, statusCode: response.statusCode) }
             return textPayload(raw)
         }
 
@@ -66,12 +66,12 @@ extension LuckyClient {
             || contentType.contains("+json") || contentType.isEmpty {
             if let parsed = JSONParser.tryParse(data) { return payloadFromJson(parsed) }
             let raw = String(decoding: data, as: UTF8.self)
-            if !ok { throw LuckyError(raw.isEmpty ? httpFailure : raw) }
+            if !ok { throw LuckyError(raw.isEmpty ? httpFailure : raw, statusCode: response.statusCode) }
             // Some proxies omit Content-Type for text responses.
             return textPayload(raw)
         }
 
-        if !ok { throw LuckyError(httpFailure) }
+        if !ok { throw LuckyError(httpFailure, statusCode: response.statusCode) }
         return binaryPayload(data, contentType: rawContentType, filename: filename)
     }
 

@@ -27,6 +27,12 @@ struct LoginScreen: View {
                         .foregroundStyle(LuckyTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .multilineTextAlignment(.center)
+                    Text(LuckyAppVersion.displayString)
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: LuckyTheme.Layout.formWidth)
                 .padding(.horizontal, LuckyTheme.Space.xl)

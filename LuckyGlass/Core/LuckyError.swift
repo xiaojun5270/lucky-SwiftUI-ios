@@ -17,8 +17,12 @@ struct LuckyAuthError: LocalizedError {
 /// Chinese copy that is displayed verbatim, so the message is the whole payload.
 struct LuckyError: LocalizedError {
     let message: String
+    let statusCode: Int?
 
-    init(_ message: String) { self.message = message }
+    init(_ message: String, statusCode: Int? = nil) {
+        self.message = message
+        self.statusCode = statusCode
+    }
 
     var errorDescription: String? { message }
 }

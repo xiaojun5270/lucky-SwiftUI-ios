@@ -4,6 +4,7 @@ import SwiftUI
 struct LuckySearchField: View {
     @Binding var text: String
     var placeholder: String = "搜索"
+    var fill: Color = LuckyTheme.surface
 
     @FocusState private var focused: Bool
 
@@ -34,7 +35,7 @@ struct LuckySearchField: View {
         .frame(minHeight: 48)
         .background {
             let shape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.field, style: .continuous)
-            shape.fill(LuckyTheme.surface)
+            shape.fill(fill)
                 .overlay(
                     shape.strokeBorder(
                         focused ? LuckyTheme.accent.opacity(0.7) : .clear,

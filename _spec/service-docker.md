@@ -386,6 +386,21 @@ Reading conventions for the tables below: "query" is the `params` argument (rend
 
 ### 5.1 Containers
 
+Native compatibility revision (2026-11-18), verified against the Lucky 2.27.2 web client:
+the native update button inspects `Config.Image` and checks it using
+`/api/docker/images/upgrade-check-ws?image_ref=...&Lucky-Admin-Token=...&_=<timestamp>`.
+The socket sends a JSON ping every two seconds and reads progress, complete, error, and cancelled
+messages. A check-method error or missing `has_update` is a failure, never an up-to-date verdict.
+Only an unavailable socket route/method permits the documented POST `images/upgrade-check`
+fallback. The old per-container GET check is retained as a legacy service API and is not used by
+the native update button; there is no speculative POST to that old container check route.
+
+After explicit confirmation, the client calls `images/pull-with-backup` with `backup_tag=true`,
+then `images/upgrade-containers` with `container_ids` containing exactly the inspected container
+ID. An already-pulled check result skips the pull. A failed recreation retains the pulled-image
+state for retry. Other containers using the image and old images are not automatically removed.
+Authentication, authorization, cancellation and registry failures propagate without switching APIs.
+
 | Function | Method | Path + query | Body | Timeout |
 | --- | --- | --- | --- | --- |
 | `listDockerContainers(input?: DockerSignalInput)` — async, returns `{ items: LuckyListItem[], raw }` | GET | `containers?all=true&includeStats=false&includeNetworkMode=true` | — | 12000 |
@@ -495,7 +510,7 @@ Image upgrade / digest bookkeeping:
 
 | Function | Method | Path + query | Body | Timeout |
 | --- | --- | --- | --- | --- |
-| `checkDockerImageUpgrade(imageRef: string, signal?: AbortSignal)` | POST | `images/upgrade-check` | `{"image_ref": imageRef}` | 45000 |
+| `checkDockerImageUpgrade(imageRef: string, signal?: AbortSignal)` — native prefers the socket above | POST fallback | `images/upgrade-check` | `{"image_ref": imageRef}` | 120000 |
 | `getDockerImageUpgradeStatus(imageRef = "", signal?: AbortSignal)` | GET | `images/upgrade-status` plus `?image_ref={imageRef}` **only when `imageRef` is non-empty** (params argument is `undefined` otherwise) | — | 12000 |
 | `dismissDockerImageUpgrade(imageRef: string, imageId = "")` | POST | `images/upgrade-dismiss` | `{"image_ref": imageRef, "image_id": imageId}` (empty string is sent) | 12000 |
 | `clearDockerImageUpgradeStatus()` | DELETE | `images/upgrade-status` | — | 12000 |

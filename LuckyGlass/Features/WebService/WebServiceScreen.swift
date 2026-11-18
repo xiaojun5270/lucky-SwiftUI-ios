@@ -431,8 +431,7 @@ extension WebServiceScreen {
     /// The eleven verbs §12 hangs off a rule row and the sub-rule cards under it.
     fileprivate var ruleActions: WebRuleActions {
         WebRuleActions(
-            // The header `Pressable` toggles between `key` and `""`, so tapping the open rule
-            // closes it and tapping another one moves the disclosure over.
+            // The dedicated 子规则 button opens one rule at a time.
             expand: { key in expanded = expanded == key ? "" : key },
             move: { index, offset in moveRule(index, offset) },
             setEnabled: { key, on in run(.toggleRule(key: key, enabled: on)) },

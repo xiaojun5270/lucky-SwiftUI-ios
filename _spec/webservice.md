@@ -703,6 +703,18 @@ On error: `setLocalError(message)` and `Alert.alert(title, message)`.
 `finally` → `setUploadBusy(false)`.
 ## 12. View: `rules` ("规则")
 
+### Native interaction revision (2026-11-18)
+
+The current SwiftUI layout supersedes the source layout below: the enable switch sits beside
+the rule identity, and explicit 子规则/count and 编辑规则 buttons have independent touch targets.
+The child list expands below the parent at full page width. It supports local search across
+remarks, domains and destinations, plus all/enabled/disabled filtering; filtered rows retain
+their original record indices for fallback keys. Child rows show frontend/destination addresses
+and expose editing and URL copying directly. Add and reorder commands sit above the child list.
+Actions use at least 44-point targets and reflow vertically for large text. API payloads,
+single-rule expansion, server ordering, URL construction and deletion confirmation remain as
+specified below. The source's “no search/filter” restriction does not apply to this redesign.
+
 Order: `SectionHeader(icon = Route, title = "反向代理规则", meta = `${rules.data?.items.length ?? 0} 项`)`,
 then the add button, then the `FlatList`.
 

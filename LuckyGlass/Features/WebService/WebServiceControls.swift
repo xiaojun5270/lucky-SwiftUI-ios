@@ -115,6 +115,52 @@ struct WebInlineActionButton: View {
     }
 }
 
+/// Flat, equally sized rule actions. The symbol yields to the full label on narrow screens.
+struct WebRuleActionLabel: View {
+    var title: String?
+    var symbol: String
+    var selected: Bool = false
+    var fills: Bool = true
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).accessibilityHidden(true)
+                if let title { Text(title) }
+            }
+            .fixedSize()
+            if let title { Text(title).fixedSize(horizontal: false, vertical: true) }
+        }
+        .font(LuckyTheme.Text.label)
+        .foregroundStyle(selected ? LuckyTheme.accent : LuckyTheme.textPrimary)
+        .padding(.horizontal, LuckyTheme.Space.s)
+        .padding(.vertical, LuckyTheme.Space.s)
+        .frame(minWidth: LuckyTheme.Space.touchTarget,
+               maxWidth: fills ? .infinity : nil, minHeight: LuckyTheme.Space.touchTarget)
+        .background(selected ? LuckyTheme.accentSoft : LuckyTheme.surfaceRaised,
+                    in: .rect(cornerRadius: LuckyTheme.Radius.row))
+        .contentShape(.rect(cornerRadius: LuckyTheme.Radius.row))
+    }
+}
+
+struct WebRuleActionButton: View {
+    var title: String
+    var symbol: String
+    var selected: Bool = false
+    var fills: Bool = true
+    var disabled: Bool = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            WebRuleActionLabel(title: title, symbol: symbol, selected: selected, fills: fills)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.45 : 1)
+    }
+}
+
 /// The switch that fronts a rule, a sub-rule or a CGI instance. `Toggle` with no label of its own,
 /// so the row decides what sits beside it.
 struct WebEnableSwitch: View {

@@ -108,6 +108,7 @@ private struct DockerContainerCard: View {
     var stat: DockerStatRow?
     var busy: Bool
     var actions: DockerContainerActions
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         LuckyCard(spacing: LuckyTheme.Space.m) {
@@ -162,7 +163,7 @@ private struct DockerContainerCard: View {
     /// Three buttons, the first of which depends on the state. 恢复 and 启动 ask nothing; 停止 and
     /// 重启 both confirm, and both interpolate the **raw** name, leading slash and all.
     private var commands: some View {
-        HStack(spacing: 6) {
+        commandLayout {
             if row.paused {
                 ContainerCommandButton(symbol: LuckySymbol.start, label: "恢复",
                                        tint: LuckyTheme.success, disabled: busy) {
@@ -189,4 +190,44 @@ private struct DockerContainerCard: View {
             }
         }
     }
+
+    private var commandLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
+    }
 }
+
+#if DEBUG
+private struct DockerContainerCardPreviews: PreviewProvider {
+    private static let row = DockerContainerRow(.object([
+        ("Id", .string("preview-postgres")), ("Names", .array([.string("/ai-proxy-postgres")])),
+        ("State", .string("running")), ("Status", .string("Up 10 days")),
+    ]), 0)
+
+    private static let stats = DockerStatRow(
+        key: "preview-postgres", name: "ai-proxy-postgres", cpu: 0.6, hasCpu: true,
+        memoryPercent: 0.2, hasMemoryPercent: true,
+        networkRx: 1_020_000_000, hasNetworkRx: true, networkTx: 24_470_000_000, hasNetworkTx: true,
+        blockRead: 294_560_000, hasBlockRead: true, blockWrite: 9_310_000_000, hasBlockWrite: true
+    )
+
+    private static var card: some View {
+        LuckyPage {
+            DockerContainerCard(row: row, stat: stats, busy: false, actions: DockerContainerActions(
+                menu: { _ in }, unpause: { _ in }, start: { _ in },
+                stop: { _, _ in }, restart: { _, _ in }, update: { _, _ in }
+            ))
+        }
+    }
+
+    static var previews: some View {
+        Group {
+            card.previewLayout(.fixed(width: 393, height: 420)).previewDisplayName("容器 · 三列两行")
+            card.previewLayout(.fixed(width: 320, height: 420)).previewDisplayName("容器 · 窄屏")
+            card.preferredColorScheme(.dark).previewDisplayName("容器 · 深色")
+            card.dynamicTypeSize(.xxxLarge).previewDisplayName("容器 · 大字体")
+        }
+    }
+}
+#endif

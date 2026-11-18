@@ -1,25 +1,20 @@
 import SwiftUI
 
-/// The eleven verbs a rule row can perform, bundled so `WebRulesView` takes one parameter and not
-/// eleven. In the original every one of these is a closure written inline in `renderItem`, closing
-/// over the screen's state; `private` being file-scoped in Swift, they have to be handed over.
+/// Server actions stay owned by WebServiceScreen; the list only arranges their controls.
 struct WebRuleActions {
     var expand: (String) -> Void
     var move: (Int, Int) -> Void
     var setEnabled: (String, Bool) -> Void
-    /// `(key, copy)` — 编辑 and 复制规则 open the same form.
     var edit: (String, Bool) -> Void
     var remove: (String, String) -> Void
     var order: (WebOrderRequest) -> Void
     var tools: (WebToolsTarget) -> Void
-    /// A `nil` sub-key is 添加子规则.
     var editSub: (String, String?) -> Void
     var setSubEnabled: (String, String, Bool) -> Void
     var removeSub: (String, String, String) -> Void
     var copyURL: (LuckyListItem, LuckyListItem) -> Void
 }
 
-/// §12 — 规则. The reverse-proxy rules, each expanding to its own sub-rules.
 struct WebRulesView: View {
     var items: [LuckyListItem]
     var expanded: String
@@ -27,329 +22,235 @@ struct WebRulesView: View {
     var busy: Bool
     var refresh: @Sendable () async -> Void
     var actions: WebRuleActions
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var entries: [WebRuleEntry] {
+        items.enumerated().map { WebRuleEntry(item: $0.element, index: $0.offset) }
+    }
 
     var body: some View {
-        WebPaneScroll(refresh: refresh) {
-            LuckySectionHeader(title: WebPane.rules.title, symbol: WebPane.rules.symbol,
-                               iconRole: WebPane.rules.iconRole) {
-                LuckyChip(text: "\(items.count) 项", tone: .idle)
+        ScrollViewReader { proxy in
+            WebPaneScroll(refresh: refresh) {
+                LuckySectionHeader(title: WebPane.rules.title, symbol: WebPane.rules.symbol,
+                                   iconRole: WebPane.rules.iconRole) {
+                    LuckyChip(text: "\(items.count) 项", tone: .idle)
+                }
+                if loading {
+                    LuckyLoadingView(text: "正在读取 Web 服务规则")
+                } else if items.isEmpty {
+                    LuckyEmptyState(symbol: WebPane.rules.symbol, title: "暂无 Web 服务规则")
+                        .padding(.vertical, LuckyTheme.Space.xl)
+                } else {
+                    ForEach(entries) { entry in
+                        WebRuleCard(entry: entry, total: items.count, expanded: expanded,
+                                    busy: busy, actions: actions)
+                            .id(entry.id)
+                    }
+                }
             }
-            if loading {
-                LuckyLoadingView(text: "正在读取 Web 服务规则")
-            } else if items.isEmpty {
-                LuckyEmptyState(symbol: WebPane.rules.symbol, title: "暂无 Web 服务规则")
-                    .padding(.vertical, LuckyTheme.Space.xl)
-            } else {
-                ForEach(items.indices, id: \.self) { index in
-                    let item = items[index]
-                    WebRuleCard(item: item, index: index, total: items.count, expanded: expanded,
-                                busy: busy, actions: actions)
+            .onChange(of: expanded) { previous, current in
+                let target = current.isEmpty ? previous : current
+                guard entries.contains(where: { $0.id == target }) else { return }
+                // In particular, the footer's collapse action returns to the parent rule.
+                if reduceMotion {
+                    proxy.scrollTo(target, anchor: .top)
+                } else {
+                    withAnimation(LuckyTheme.Motion.reveal) { proxy.scrollTo(target, anchor: .top) }
                 }
             }
         }
     }
 }
 
-// MARK: - 规则卡片
-
-/// One rule panel: disclosure header, enable state and the primary edit action. Less frequent
-/// commands live in a menu so the card does not become a toolbar.
+/// Independent hit areas for the rule switch, child list and editor. Child cards use the full
+/// page width so opening a large rule does not squeeze its addresses and controls into an inset.
 private struct WebRuleCard: View {
-    var item: LuckyListItem
-    var index: Int
+    var entry: WebRuleEntry
     var total: Int
     var expanded: String
     var busy: Bool
     var actions: WebRuleActions
 
-    private var key: String { WebRecord.key(item, index) }
-    private var name: String { WebRecord.pick(item, ["RuleName", "Name"], "未命名规则") }
-    private var subs: [LuckyListItem] { WebRecord.array(item, ["ProxyList"]) }
-    private var enabled: Bool { WebRecord.isEnabled(item) }
-    private var isOpen: Bool { expanded == key }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var query = ""
+    @State private var filter: WebSubRuleFilter = .all
 
-    /// `${Network|tcp} · ${ListenIP|*}:${ListenPort|--} · ${n} 个子规则` — verbatim, port and all.
-    /// There is no masking anywhere on this screen.
-    private var summary: String {
-        let network = WebRecord.pick(item, ["Network"], "tcp")
-        let ip = WebRecord.pick(item, ["ListenIP"], "*")
-        let port = WebRecord.pick(item, ["ListenPort"], "--")
-        return "\(network) · \(ip):\(port) · \(subs.count) 个子规则"
+    private var isOpen: Bool { expanded == entry.id }
+    private var subs: [WebSubRuleEntry] { entry.subRules }
+    private var matchingSubs: [WebSubRuleEntry] { subs.filter { $0.matches(query) } }
+    private var visibleSubs: [WebSubRuleEntry] {
+        matchingSubs.filter { filter.includes($0) }
     }
 
     var body: some View {
-        LuckyCard(spacing: 14) {
-            header
-            status
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
+            LuckyCard(spacing: LuckyTheme.Space.l, tone: isOpen ? .brand : nil) {
+                header
+                primaryActions
+            }
             if isOpen { expansion }
         }
     }
-}
 
-extension WebRuleCard {
-    /// The whole header is the disclosure control. The glyph never varies — a rule is a rule,
-    /// whatever it proxies.
+    private var headerLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.m))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.m))
+    }
+
     private var header: some View {
-        Button {
-            actions.expand(key)
-        } label: {
+        headerLayout {
             HStack(spacing: LuckyTheme.Space.m) {
-                LuckyIconTile(symbol: LuckySymbol.network, size: 36, glyph: 16, role: .web)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(name)
+                LuckyIconTile(symbol: LuckySymbol.network, size: 40, glyph: 19, role: .web)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.name)
                         .font(LuckyTheme.Text.cardTitle)
                         .foregroundStyle(LuckyTheme.textPrimary)
-                        .lineLimit(1)
-                    Text(summary)
-                        .font(LuckyTheme.Text.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(entry.listener)
+                        .font(LuckyTheme.Text.caption.monospaced())
                         .foregroundStyle(LuckyTheme.textSecondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LuckyTheme.textTertiary)
-                    .frame(width: 24, height: 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(isOpen ? "收起子规则" : "展开子规则")
-    }
-
-    /// The switch and its sentence are the entire status derivation — no pill, no TLS badge, no
-    /// protocol badge.
-    private var status: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: LuckyTheme.Space.m) {
-                statusControl
-                Spacer(minLength: LuckyTheme.Space.m)
-                primaryActions
-            }
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-                statusControl
-                HStack {
-                    Spacer(minLength: 0)
-                    primaryActions
+            HStack {
+                if dynamicTypeSize.isAccessibilitySize {
+                    Text("启用规则").font(LuckyTheme.Text.body)
+                    Spacer(minLength: LuckyTheme.Space.s)
                 }
+                WebEnableSwitch(isOn: entry.enabled, disabled: busy, name: "启用规则 \(entry.name)") {
+                    actions.setEnabled(entry.id, $0)
+                }
+                .tint(LuckyTheme.success)
+                .fixedSize()
+                .frame(minHeight: LuckyTheme.Space.touchTarget)
             }
         }
-        .padding(LuckyTheme.Space.s)
-        .background(LuckyTheme.surfaceRaised,
-                    in: .rect(cornerRadius: LuckyTheme.Radius.row))
     }
 
-    private var statusControl: some View {
-        HStack(spacing: LuckyTheme.Space.s) {
-            WebEnableSwitch(isOn: enabled, disabled: busy, name: "启用规则") { on in
-                actions.setEnabled(key, on)
-            }
-            .fixedSize()
-            Text(enabled ? "已启用" : "已停用")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(LuckyTheme.textSecondary)
-        }
-        .fixedSize()
-    }
-
+    @ViewBuilder
     private var primaryActions: some View {
-        HStack(spacing: LuckyTheme.Space.s) {
-            WebInlineActionButton(title: "编辑", symbol: "pencil", prominent: true) {
-                actions.edit(key, false)
+        if dynamicTypeSize >= .xxLarge {
+            VStack(spacing: LuckyTheme.Space.s) {
+                childrenButton
+                HStack(spacing: LuckyTheme.Space.s) { editButton; moreMenu }
             }
-            moreMenu
+        } else {
+            HStack(spacing: LuckyTheme.Space.s) { childrenButton; editButton; moreMenu }
         }
-        .fixedSize()
+    }
+
+    private var childrenButton: some View {
+        WebRuleActionButton(title: "子规则 \(subs.count)",
+                            symbol: isOpen ? "chevron.up" : "chevron.down", selected: isOpen) {
+            actions.expand(entry.id)
+        }
+        .accessibilityLabel("\(entry.name)，\(subs.count) 条子规则")
+        .accessibilityValue(isOpen ? "已展开" : "已收起")
+        .accessibilityHint(isOpen ? "收起子规则列表" : "展开、搜索和管理子规则")
+    }
+
+    private var editButton: some View {
+        WebRuleActionButton(title: "编辑规则", symbol: "pencil", disabled: busy) {
+            actions.edit(entry.id, false)
+        }
+        .accessibilityLabel("编辑规则 \(entry.name)")
     }
 
     private var moreMenu: some View {
         Menu {
-            Section("顺序") {
-                Button {
-                    actions.move(index, -1)
-                } label: {
-                    Label("上移", systemImage: "arrow.up")
-                }
-                .disabled(busy || index == 0)
-                Button {
-                    actions.move(index, 1)
-                } label: {
-                    Label("下移", systemImage: "arrow.down")
-                }
-                .disabled(busy || index == total - 1)
-                Button {
-                    actions.order(WebOrderRequest(key: key, name: name, keys: subKeys))
-                } label: {
-                    Label("子规则排序", systemImage: "list.number")
-                }
-                .disabled(busy || subs.count < 2)
+            Section("规则顺序") {
+                Button("上移", systemImage: "arrow.up") { actions.move(entry.index, -1) }
+                    .disabled(busy || entry.index == 0)
+                Button("下移", systemImage: "arrow.down") { actions.move(entry.index, 1) }
+                    .disabled(busy || entry.index == total - 1)
             }
-            Section("规则") {
-                Button {
-                    actions.edit(key, true)
-                } label: {
-                    Label("复制规则", systemImage: LuckySymbol.copy)
+            Section("规则操作") {
+                Button("复制规则", systemImage: LuckySymbol.copy) { actions.edit(entry.id, true) }
+                Button("日志与工具", systemImage: "wrench.and.screwdriver") {
+                    actions.tools(WebToolsTarget(ruleKey: entry.id, ruleName: entry.name))
                 }
-                Button {
-                    actions.tools(WebToolsTarget(ruleKey: key, ruleName: name))
-                } label: {
-                    Label("更多操作", systemImage: "wrench.and.screwdriver")
+                Button("删除规则", systemImage: LuckySymbol.delete, role: .destructive) {
+                    actions.remove(entry.id, entry.name)
                 }
-                Button(role: .destructive) {
-                    actions.remove(key, name)
-                } label: {
-                    Label("删除规则", systemImage: LuckySymbol.delete)
-                }
-                .disabled(busy)
             }
         } label: {
-            LuckyIconTile(symbol: "ellipsis", size: 36, glyph: 15, tone: .idle)
-                .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
-                .contentShape(Rectangle())
+            WebRuleActionLabel(symbol: "ellipsis", fills: false)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("规则更多操作")
+        .disabled(busy)
+        .opacity(busy ? 0.45 : 1)
+        .accessibilityLabel("\(entry.name) 的更多操作")
     }
 
-    /// The 排序 payload. `keyOf` again, so a sub-rule with no key of its own is ordered by the
-    /// position it currently holds — which is what the sheet then shows.
-    private var subKeys: [String] { subs.enumerated().map { WebRecord.key($1, $0) } }
-}
-
-extension WebRuleCard {
-    /// §12.2 — only for the open rule.
     private var expansion: some View {
-        let entries = subs
-        return VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-            LuckyHairline()
-            ServiceActionButton(title: "添加子规则", symbol: LuckySymbol.add, tone: .brand,
-                                fill: .tinted, height: 40,
-                                radius: LuckyTheme.Radius.row) {
-                actions.editSub(key, nil)
-            }
-            if entries.isEmpty {
-                Text("暂无子规则")
-                    .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(LuckyTheme.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, LuckyTheme.Space.m)
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
+            childControls
+            if subs.isEmpty {
+                LuckyEmptyState(symbol: "point.topleft.down.to.point.bottomright.curvepath",
+                                title: "暂无子规则", message: "添加子规则，配置前端与后端地址")
+            } else if visibleSubs.isEmpty {
+                LuckyEmptyState(symbol: LuckySymbol.search, title: "没有匹配的子规则",
+                                message: "尝试其他域名、备注或后端地址") {
+                    Button("清除搜索和筛选") { query = ""; filter = .all }
+                        .buttonStyle(.bordered)
+                }
             } else {
-                ForEach(entries.indices, id: \.self) { subIndex in
-                    let sub = entries[subIndex]
-                    WebSubRuleCard(rule: item, sub: sub, index: subIndex, parentKey: key,
-                                   parentName: name, busy: busy, actions: actions)
+                ForEach(visibleSubs) { sub in
+                    WebSubRuleCard(rule: entry, entry: sub, busy: busy, actions: actions)
+                }
+                if visibleSubs.count > 3 {
+                    WebRuleActionButton(title: "收起 \(entry.name) 的子规则", symbol: "chevron.up") {
+                        actions.expand(entry.id)
+                    }
                 }
             }
         }
-        .padding(.top, LuckyTheme.Space.hair)
-    }
-}
-
-// MARK: - 子规则卡片
-
-/// §12.3 — a sub-rule inside its parent's card. The shield's tint is the only enabled/disabled
-/// indicator here, and unlike the rule's switch this one carries no track colour of its own.
-private struct WebSubRuleCard: View {
-    var rule: LuckyListItem
-    var sub: LuckyListItem
-    var index: Int
-    var parentKey: String
-    var parentName: String
-    var busy: Bool
-    var actions: WebRuleActions
-
-    private var key: String { WebRecord.key(sub, index) }
-    private var enabled: Bool { WebRecord.isEnabled(sub) }
-
-    private var name: String {
-        let remark = WebRecord.pick(sub, ["Remark"]).jsTrimmed
-        return remark.isEmpty ? "子规则 \(index + 1)" : remark
     }
 
-    private var type: String { WebRecord.pick(sub, ["WebServiceType"]) }
-
-    private var fileService: Bool { type.lowercased().contains("file") }
-
-    private var serviceTypeLabel: String {
-        switch type.jsTrimmed.lowercased() {
-        case "", "reverseproxy": "反向代理"
-        case "fileserver": "文件服务"
-        case "redirect": "重定向"
-        case "url": "URL 跳转"
-        case "snirouting": "SNI 路由"
-        case "oauth": "OAuth 认证"
-        default: type
-        }
-    }
-
-    var body: some View {
-        LuckyInset(padding: LuckyTheme.Space.m, spacing: LuckyTheme.Space.m) {
-            header
-            LuckyHairline()
-            verbs
-        }
-    }
-}
-
-extension WebSubRuleCard {
-    private var header: some View {
-        HStack(alignment: .center, spacing: LuckyTheme.Space.m) {
-            LuckyFunctionIcon(symbol: "checkmark.shield", size: 32, glyph: 13,
-                              color: enabled ? LuckyTheme.success : LuckyTheme.idle)
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
-                Text(name)
-                    .font(LuckyTheme.Text.label)
-                    .foregroundStyle(LuckyTheme.textPrimary)
-                    .lineLimit(1)
-                Text(serviceTypeLabel)
-                    .font(LuckyTheme.Text.captionMedium)
-                    .foregroundStyle(enabled ? LuckyTheme.success : LuckyTheme.textSecondary)
-                    .padding(.horizontal, LuckyTheme.Space.s)
-                    .padding(.vertical, LuckyTheme.Space.xs)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(enabled ? LuckyTheme.successSoft : LuckyTheme.idleSoft)
-                    )
-            }
-            Spacer(minLength: 0)
-            WebEnableSwitch(isOn: enabled, disabled: busy, name: "启用子规则") { on in
-                actions.setSubEnabled(parentKey, key, on)
-            }
-            .fixedSize()
-        }
-    }
-
-    private var verbs: some View {
-        HStack(spacing: LuckyTheme.Space.s) {
-            WebInlineActionButton(title: "复制网址", symbol: LuckySymbol.copy, expands: true) {
-                actions.copyURL(rule, sub)
-            }
-            WebInlineActionButton(title: "编辑", symbol: "pencil", prominent: true,
-                                  expands: true) {
-                actions.editSub(parentKey, key)
-            }
-            Menu {
-                Button {
-                    actions.tools(WebToolsTarget(ruleKey: parentKey, ruleName: parentName,
-                                                 subKey: key, subName: name,
-                                                 fileService: fileService))
-                } label: {
-                    Label("更多操作", systemImage: "wrench.and.screwdriver")
+    private var childControls: some View {
+        LuckyCard(padding: LuckyTheme.Space.l, spacing: LuckyTheme.Space.m) {
+            LuckySectionHeader(title: "子规则", subtitle: "\(entry.name) · 显示 \(visibleSubs.count)/\(subs.count) 条")
+            childControlLayout {
+                WebRuleActionButton(title: "添加子规则", symbol: LuckySymbol.add,
+                                    selected: true, disabled: busy) {
+                    actions.editSub(entry.id, nil)
                 }
-                Button(role: .destructive) {
-                    actions.removeSub(parentKey, key, name)
-                } label: {
-                    Label("删除子规则", systemImage: LuckySymbol.delete)
+                WebRuleActionButton(title: "调整顺序", symbol: "list.number",
+                                    disabled: busy || subs.count < 2) {
+                    actions.order(WebOrderRequest(key: entry.id, name: entry.name, keys: subs.map(\.id)))
                 }
-                .disabled(busy)
-            } label: {
-                LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 14, tone: .idle)
-                    .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("子规则更多操作")
+            if !subs.isEmpty {
+                LuckySearchField(text: $query, placeholder: "搜索域名、备注或后端地址",
+                                 fill: LuckyTheme.surfaceRaised)
+                statePicker
+            }
+        }
+    }
+
+    private var childControlLayout: AnyLayout {
+        dynamicTypeSize >= .xxLarge
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
+    }
+
+    @ViewBuilder
+    private var statePicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            stateOptions.pickerStyle(.menu)
+        } else {
+            stateOptions.pickerStyle(.segmented)
+        }
+    }
+
+    private var stateOptions: some View {
+        Picker("子规则状态", selection: $filter) {
+            ForEach(WebSubRuleFilter.allCases) { option in
+                Text("\(option.title) \(matchingSubs.filter { option.includes($0) }.count)").tag(option)
+            }
         }
     }
 }

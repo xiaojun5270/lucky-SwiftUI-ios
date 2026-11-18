@@ -145,7 +145,8 @@ actor LuckyClient {
         let ok = (200..<300).contains(response.statusCode)
         if !ok || ret != 0 {
             let message = payload.msg ?? ""
-            throw LuckyError(message.isEmpty ? "请求失败（HTTP \(response.statusCode)）" : message)
+            throw LuckyError(message.isEmpty ? "请求失败（HTTP \(response.statusCode)）" : message,
+                             statusCode: response.statusCode)
         }
         return payload
     }

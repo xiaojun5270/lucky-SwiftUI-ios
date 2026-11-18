@@ -3,18 +3,28 @@ import SwiftUI
 // MARK: - 表单与详情
 
 extension DockerScreen {
-    /// §19.2's `DockerFormEditor`. `busy` is `mutation.isPending` — any mutation at all, because
-    /// only one can run and the editor is modal over the row that started it.
+    /// Container upgrades use the checked image workflow; other commands retain their forms.
+    @ViewBuilder
     func editorSheet(_ request: DockerEditorRequest) -> some View {
-        DockerFormEditor(
-            request: request,
-            busy: running != nil,
-            close: {
-                releaseUpload(for: request.kind)
-                editor = nil
-            },
-            save: { value in Task { await save(request, value) } }
-        )
+        if request.kind == .containerUpgrade {
+            DockerContainerUpgradeSheet(
+                key: request.key ?? "", name: request.value["container_name"]?.stringValue ?? request.title,
+                close: { editor = nil }, updated: {
+                    localNotice = "容器已更新，旧镜像已保留"
+                    await invalidate(keys: [.containers, .containerStats, .images, .maintenance])
+                }
+            )
+        } else {
+            DockerFormEditor(
+                request: request,
+                busy: running != nil,
+                close: {
+                    releaseUpload(for: request.kind)
+                    editor = nil
+                },
+                save: { value in Task { await save(request, value) } }
+            )
+        }
     }
 
     /// The editor sheet's `onDismiss`, which has no counterpart in the original: a swipe past a
