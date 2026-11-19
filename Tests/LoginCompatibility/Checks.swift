@@ -13,8 +13,22 @@ final class LoginProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         do {
-            Self.requests.append(request)
-            let (status, body, headers) = try Self.handler(request)
+            var captured = request
+            // Darwin URLSession exposes uploaded bodies as streams to URLProtocol.
+            if captured.httpBody == nil, let stream = captured.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+                captured.httpBody = data
+            }
+            Self.requests.append(captured)
+            let (status, body, headers) = try Self.handler(captured)
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(body.utf8))
             client?.urlProtocolDidFinishLoading(self)
