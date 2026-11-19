@@ -47,6 +47,7 @@ extension JSONValue {
 }
 
 struct LuckyLoginInput: Sendable, Equatable {
+    var remark: String = ""
     var baseUrl: String = ""
     var account: String = ""
     var password: String = ""

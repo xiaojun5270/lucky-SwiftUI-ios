@@ -15,6 +15,8 @@ actor LuckyClient {
     /// member is unreachable from an extension in another file.
     let session: URLSession
 
+    init(session: URLSession) { self.session = session }
+
     init() {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -27,7 +29,19 @@ actor LuckyClient {
         session = URLSession(configuration: configuration)
     }
 
-    func apply(_ credentials: LuckyCredentials) { self.credentials = credentials }
+    func apply(_ credentials: LuckyCredentials) {
+        if credentials.generation != self.credentials.generation {
+            refreshTask?.cancel()
+            refreshTask = nil
+        }
+        self.credentials = credentials
+    }
+
+    private func requireCurrent(_ context: LuckyCredentials) throws {
+        guard context.generation == credentials.generation,
+              context.baseUrl == credentials.baseUrl, context.account == credentials.account,
+              context.password == credentials.password else { throw CancellationError() }
+    }
 
     var snapshot: LuckyCredentials { credentials }
 
@@ -64,6 +78,7 @@ actor LuckyClient {
 
     @discardableResult
     func fetch(_ request: LuckyRequest) async throws -> JSONValue {
+        let context = credentials
         let base = (request.baseUrl ?? credentials.baseUrl).jsTrimmed.withoutTrailingSlashes
         guard !base.isEmpty else { throw LuckyError("请输入 Lucky 服务地址") }
         let token = request.token ?? credentials.token
@@ -85,8 +100,9 @@ actor LuckyClient {
         if !token.isEmpty { urlRequest.setValue(token, forHTTPHeaderField: "Lucky-Admin-Token") }
 
         let (data, response) = try await send(urlRequest, timeout: request.timeout)
+        try requireCurrent(context)
         let payload = try Self.envelope(data: data, response: response, kind: request.responseKind)
-        return try await resolve(payload: payload, request: request, response: response, token: token)
+        return try await resolve(payload: payload, request: request, response: response, token: token, context: context)
     }
 
     /// Convenience matching the many `luckyFetch('/api/...')` call sites.
@@ -118,7 +134,8 @@ actor LuckyClient {
         payload: JSONValue,
         request: LuckyRequest,
         response: HTTPURLResponse,
-        token: String
+        token: String,
+        context: LuckyCredentials
     ) async throws -> JSONValue {
         let ret = payload.ret
         if response.statusCode == 401 || ret == -1 {
@@ -131,12 +148,15 @@ actor LuckyClient {
                     } else {
                         latest = try await refreshToken()
                     }
+                    try requireCurrent(context)
                     var retry = request
                     retry.token = latest
                     retry.retryAuth = false
                     return try await fetch(retry)
                 } catch {
-                    await LuckySession.shared.end()
+                    try requireCurrent(context)
+                    if error is CancellationError { throw error }
+                    await LuckySession.shared.end(ifGeneration: context.generation)
                     if let authError = error as? LuckyAuthError { throw authError }
                 }
             }
@@ -153,7 +173,12 @@ actor LuckyClient {
 
     /// `refreshLuckyToken()` — single flight, so a burst of 401s triggers one login.
     func refreshToken() async throws -> String {
-        if let refreshTask { return try await refreshTask.value }
+        if let refreshTask {
+            let pending = credentials
+            let token = try await refreshTask.value
+            try requireCurrent(pending)
+            return token
+        }
         let pending = credentials
         let urlSession = session
         let task = Task<String, Error> {
@@ -167,9 +192,14 @@ actor LuckyClient {
             )
         }
         refreshTask = task
-        defer { refreshTask = nil }
+        defer {
+            // An older refresh must not clear a newer account's single-flight slot.
+            if pending.generation == credentials.generation { refreshTask = nil }
+        }
         let token = try await task.value
-        await LuckySession.shared.saveToken(token)
+        try requireCurrent(pending)
+        await LuckySession.shared.saveToken(token, ifGeneration: pending.generation)
+        try requireCurrent(pending)
         return token
     }
 }

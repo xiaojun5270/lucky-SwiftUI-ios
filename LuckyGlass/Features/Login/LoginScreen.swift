@@ -4,7 +4,9 @@ import SwiftUI
 ///
 /// Connection, credentials and the primary action stay together in one keyboard-aware scroll view.
 struct LoginScreen: View {
-    private enum Field: Hashable { case baseUrl, account, password, twoFACode }
+    var addAccount: Bool = false
+    @Environment(\.dismiss) private var dismiss
+    private enum Field: Hashable { case remark, baseUrl, account, password, twoFACode }
 
     @State private var input = LuckyLoginInput()
     @State private var errors: [Field: String] = [:]
@@ -44,15 +46,27 @@ struct LoginScreen: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
         }
+        .navigationTitle(addAccount ? "添加账号" : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if addAccount {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                        .disabled(submitting)
+                }
+            }
+        }
+        .interactiveDismissDisabled(submitting)
         .task {
             // `defaultValues: { baseUrl: luckySessionState.baseUrl, … }` — read once, so typing is
             // never overwritten by a later store update.
-            guard !seeded else { return }
+            guard !addAccount, !seeded else { return }
             seeded = true
             let session = LuckySession.shared
             input.baseUrl = session.baseUrl
             input.account = session.account
             input.password = session.password
+            input.remark = session.remark
         }
     }
 
@@ -60,7 +74,7 @@ struct LoginScreen: View {
         VStack(spacing: LuckyTheme.Space.l) {
             LuckyMark(size: 80)
             VStack(spacing: LuckyTheme.Space.s) {
-                Text("连接到 Lucky")
+                Text(addAccount ? "连接新账号" : "连接到 Lucky")
                     .font(LuckyTheme.Text.hero)
                     .foregroundStyle(LuckyTheme.textPrimary)
                 Text("你的服务器，尽在掌握。")
@@ -77,6 +91,7 @@ struct LoginScreen: View {
         LuckyCard(spacing: LuckyTheme.Space.l) {
             field(.baseUrl, "服务地址", "http://192.168.1.2:16601", "link",
                   keyboard: .URL, contentType: .URL)
+            field(.remark, "备注（可选）", "例如：家里的服务器", "tag")
             LuckyHairline().padding(.vertical, LuckyTheme.Space.xs)
             field(.account, "管理员账号", "admin", "person",
                   contentType: .username)
@@ -153,6 +168,7 @@ struct LoginScreen: View {
 
     private func binding(_ field: Field) -> Binding<String> {
         switch field {
+        case .remark: $input.remark
         case .baseUrl: $input.baseUrl
         case .account: $input.account
         case .password: $input.password
@@ -206,8 +222,10 @@ struct LoginScreen: View {
                     baseUrl: input.baseUrl,
                     account: input.account,
                     password: input.password,
-                    token: token
+                    token: token,
+                    remark: input.remark
                 )
+                if addAccount { dismiss() }
                 // `queryClient.clear()` then `router.replace('/monitor')`: there is no cache to
                 // clear here, and the root view swaps to the tabs as soon as the token lands.
             } catch {

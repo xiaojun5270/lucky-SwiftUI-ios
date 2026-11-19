@@ -50,6 +50,7 @@ struct LuckyPage<Content: View>: View {
 struct LuckyScreenHeader<Trailing: View>: View {
     var title: String
     var subtitle: String
+    var subtitleAction: (() -> Void)? = nil
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -74,10 +75,30 @@ struct LuckyScreenHeader<Trailing: View>: View {
                 .font(LuckyTheme.Text.hero)
                 .foregroundStyle(LuckyTheme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            Text(subtitle)
-                .font(LuckyTheme.Text.body)
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if let subtitleAction {
+                Button(action: subtitleAction) {
+                    HStack(spacing: LuckyTheme.Space.s) {
+                        Text(subtitle)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: "chevron.down")
+                            .font(LuckyTheme.Text.captionMedium)
+                            .accessibilityHidden(true)
+                    }
+                    .font(LuckyTheme.Text.body)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .frame(minHeight: LuckyTheme.Space.touchTarget, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("切换账号，\(subtitle)")
+                .accessibilityHint("查看已保存的账号或添加账号")
+                .accessibilityIdentifier("dashboard.accountSwitcher")
+            } else {
+                Text(subtitle)
+                    .font(LuckyTheme.Text.body)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

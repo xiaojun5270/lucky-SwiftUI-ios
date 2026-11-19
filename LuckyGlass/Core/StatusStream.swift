@@ -38,6 +38,28 @@ final class LuckyStatusStore {
 
     // MARK: - Lifecycle
 
+    /// Invalidate the socket, buffered frames and chart data before another account
+    /// becomes visible. Existing view holders remain balanced across root recreation.
+    func resetForSessionChange() {
+        generation += 1
+        runner?.cancel()
+        runner = nil
+        flushTimer?.cancel()
+        flushTimer = nil
+        socket?.cancel()
+        socket = nil
+        pending = nil
+        decoding = false
+        lastUpdate = .distantPast
+        data = nil
+        connected = false
+        error = ""
+        if holders > 0 {
+            let current = generation
+            runner = Task { [weak self] in await self?.run(generation: current) }
+        }
+    }
+
     func retain() {
         holders += 1
         guard runner == nil else { return }
@@ -159,6 +181,9 @@ final class LuckyStatusStore {
             }
             if generation == self.generation { error = "" }
         } catch {
+            // Refresh may resume after a switch canceled this socket. Never end
+            // whichever account is now active on behalf of the old connection.
+            guard generation == self.generation, !Task.isCancelled else { return true }
             await LuckySession.shared.end()
             if generation == self.generation { self.error = "登录已失效，请重新登录" }
         }
@@ -197,11 +222,11 @@ final class LuckyStatusStore {
     }
 
     private func apply(_ decoded: Result<LuckyLiveStatus, LuckyError>, generation: Int) {
+        guard generation == self.generation else { return }
         defer {
             decoding = false
             if pending != nil { flush(generation: generation) }
         }
-        guard generation == self.generation else { return }
         switch decoded {
         case .success(let status):
             lastUpdate = Date()

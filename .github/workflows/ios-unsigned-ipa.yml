@@ -41,6 +41,8 @@ jobs:
           bash Tests/DockerAPICompatibility/run.sh
           bash Tests/WebServiceCompatibility/run.sh
           bash Tests/StatusCompatibility/run.sh
+          bash Tests/AccountSwitching/run.sh
+          python3 Tests/AccountUI/checks.py
 
       - name: Inspect project
         run: |

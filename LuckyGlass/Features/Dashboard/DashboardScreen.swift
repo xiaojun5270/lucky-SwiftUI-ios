@@ -411,6 +411,99 @@ private struct ReverseProxyCard: View {
     }
 }
 
+/// Never show URL user-info, query strings or access paths in account chrome.
+private func accountServerName(_ baseUrl: String) -> String {
+    guard let url = URL(string: baseUrl), let host = url.host else { return "Lucky 服务器" }
+    return host + (url.port.map { ":\($0)" } ?? "")
+}
+
+private struct DashboardAccountPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var session = LuckySession.shared
+    @State private var showingAddAccount = false
+    @State private var switching = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("已保存的账号") {
+                    ForEach(session.profiles) { profile in
+                        accountRow(profile)
+                    }
+                }
+                Section {
+                    Button {
+                        showingAddAccount = true
+                    } label: {
+                        Label("添加账号", systemImage: "plus.circle")
+                            .frame(minHeight: LuckyTheme.Space.touchTarget)
+                    }
+                    .accessibilityIdentifier("accounts.add")
+                }
+            }
+            .disabled(switching)
+            .navigationTitle("切换账号")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") { dismiss() }
+                        .disabled(switching)
+                }
+            }
+            .sheet(isPresented: $showingAddAccount) {
+                NavigationStack {
+                    LoginScreen(addAccount: true)
+                }
+            }
+        }
+        .interactiveDismissDisabled(switching)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func accountRow(_ profile: LuckyAccountProfile) -> some View {
+        let isCurrent = profile.id == session.activeProfileID
+        return Button {
+            guard !switching else { return }
+            guard !isCurrent else { dismiss(); return }
+            switching = true
+            Task { @MainActor in
+                await session.switchTo(profileID: profile.id)
+                switching = false
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: LuckyTheme.Space.m) {
+                VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
+                    Text(profile.displayName)
+                        .font(LuckyTheme.Text.bodyMedium)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                    Text(profile.account)
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textSecondary)
+                    Text(accountServerName(profile.baseUrl))
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textSecondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: LuckyTheme.Space.s)
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(LuckyTheme.accent)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(minHeight: LuckyTheme.Space.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isCurrent ? "当前账号" : "")
+        .accessibilityHint(isCurrent ? "" : "切换到此账号")
+        .accessibilityIdentifier("accounts.profile.\(profile.id)")
+    }
+}
+
 /// The 总览 tab root.
 struct DashboardScreen: View {
     @Environment(\.luckyNavigator) private var navigator
@@ -418,6 +511,7 @@ struct DashboardScreen: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var session = LuckySession.shared
+    @State private var showingAccounts = false
 
     @State private var rules: [LuckyListItem] = []
     @State private var rulesReady = false
@@ -431,7 +525,8 @@ struct DashboardScreen: View {
 
     var body: some View {
         LuckyPage(spacing: LuckyTheme.Space.section, refresh: { await refreshAll() }) {
-            LuckyScreenHeader(title: "总览", subtitle: serverName) {
+            LuckyScreenHeader(title: "总览", subtitle: accountDisplayName,
+                              subtitleAction: { showingAccounts = true }) {
                 Button { navigator.selection = .settings } label: {
                     LuckyMark(size: 46)
                         .frame(width: 52, height: 52)
@@ -470,11 +565,15 @@ struct DashboardScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task(id: active) { await holdStatus() }
+        .sheet(isPresented: $showingAccounts) {
+            DashboardAccountPicker()
+        }
         .task(id: active) { await pollRules() }
     }
 
-    private var serverName: String {
-        URL(string: session.baseUrl)?.host ?? "Lucky 服务器"
+    private var accountDisplayName: String {
+        let remark = session.remark.trimmingCharacters(in: .whitespacesAndNewlines)
+        return remark.isEmpty ? accountServerName(session.baseUrl) : remark
     }
 
     /// 系统资源 — `TrendChart maxValue={100}` over the socket's 90-sample history. The original

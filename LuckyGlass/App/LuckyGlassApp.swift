@@ -30,6 +30,7 @@ struct LuckyGlassApp: App {
             // state, which is what the redirect achieved by unmounting the stack.
             if session.isAuthenticated {
                 LuckyRoot()
+                    .id(session.sessionGeneration)
             } else {
                 LoginScreen()
             }
