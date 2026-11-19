@@ -35,8 +35,12 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Check Docker API compatibility
-        run: bash Tests/DockerAPICompatibility/run.sh
+      - name: Check V2 and V3 API compatibility
+        run: |
+          bash Tests/LoginCompatibility/run.sh
+          bash Tests/DockerAPICompatibility/run.sh
+          bash Tests/WebServiceCompatibility/run.sh
+          bash Tests/StatusCompatibility/run.sh
 
       - name: Inspect project
         run: |

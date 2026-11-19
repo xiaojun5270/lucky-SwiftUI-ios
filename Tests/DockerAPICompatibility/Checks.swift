@@ -48,6 +48,10 @@ enum DockerCompatibilityChecks {
             check("encode authentication query", components.queryItems?.first(where: { $0.name == "Lucky-Admin-Token" })?.value == "example+token&")
             check("socket uses timestamp", components.queryItems?.first(where: { $0.name == "_" })?.value == "1234")
         } else { check("socket URL", false) }
+        let ticketURL = DockerImageUpgradeProtocol.socketURL(baseURL: "https://example.invalid/secure/", token: "short-ticket+&", image: "app:latest", millis: 1, credentialParameter: "Lucky-Temp-Access-Ticket")
+        let ticketQuery = ticketURL.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems
+        check("V3 socket uses temporary ticket parameter", ticketQuery?.first(where: { $0.name == "Lucky-Temp-Access-Ticket" })?.value == "short-ticket+&")
+        check("V3 socket never leaks admin token", ticketQuery?.contains(where: { $0.name == "Lucky-Admin-Token" }) == false)
         check("reject unsupported URL scheme", DockerImageUpgradeProtocol.socketURL(baseURL: "ftp://example.invalid", token: "x", image: "app") == nil)
 
         do {

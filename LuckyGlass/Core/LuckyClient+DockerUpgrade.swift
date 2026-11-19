@@ -27,9 +27,9 @@ extension LuckyClient {
         let credentials = snapshot
         guard !credentials.baseUrl.isEmpty else { throw LuckyError("请先配置 Lucky 服务地址") }
         guard !credentials.token.isEmpty else { throw LuckyAuthError() }
-        guard let url = DockerImageUpgradeProtocol.socketURL(
+        let url = try await DockerService.imageUpgradeSocketURL(
             baseURL: credentials.baseUrl, token: credentials.token, image: image
-        ) else { throw LuckyError("服务地址无效，无法检查镜像更新") }
+        )
 
         let socket = session.webSocketTask(with: url)
         socket.resume()

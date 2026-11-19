@@ -57,7 +57,8 @@ enum DockerImageUpgradeProtocol {
         case complete(JSONValue)
     }
 
-    static func socketURL(baseURL: String, token: String, image: String, millis: Int64? = nil) -> URL? {
+    static func socketURL(baseURL: String, token: String, image: String, millis: Int64? = nil,
+                          credentialParameter: String = "Lucky-Admin-Token") -> URL? {
         guard var components = URLComponents(string: baseURL.jsTrimmed.withoutTrailingSlashes) else { return nil }
         switch components.scheme?.lowercased() {
         case "http": components.scheme = "ws"
@@ -67,7 +68,7 @@ enum DockerImageUpgradeProtocol {
         components.path = components.path.withoutTrailingSlashes + "/api/docker/images/upgrade-check-ws"
         let stamp = millis ?? Int64(Date().timeIntervalSince1970 * 1000)
         components.percentEncodedQuery = "image_ref=\(JSCompat.encodeURIComponent(image))"
-            + "&Lucky-Admin-Token=\(JSCompat.encodeURIComponent(token))&_=\(stamp)"
+            + "&\(JSCompat.encodeURIComponent(credentialParameter))=\(JSCompat.encodeURIComponent(token))&_=\(stamp)"
         components.fragment = nil
         return components.url
     }

@@ -1004,6 +1004,35 @@ enum DockerService {
 
     /// Match the web interface's image check socket, including progress and heartbeat messages.
     /// Servers without that socket can use the documented image HTTP check instead.
+    /// V3 browser sockets use a short-lived, route-bound ticket. V2 has no ticket route.
+    static func imageUpgradeSocketURL(baseURL: String, token: String, image: String) async throws -> URL {
+        var credential = token
+        var parameter = "Lucky-Admin-Token"
+        do {
+            let response = try await client.fetch("/api/temp-access-tickets", method: "POST", body: .value(.object([
+                ("method", .string("GET")),
+                ("path", .string("/api/docker/images/upgrade-check-ws")),
+                ("query", .object([("image_ref", .string(image))])),
+            ])))
+            guard let ticket = response["ticket"]?.stringValue, !ticket.jsTrimmed.isEmpty else {
+                throw LuckyError("服务端未返回镜像检查临时票据")
+            }
+            credential = ticket
+            parameter = response["ticketParam"]?.stringValue ?? "Lucky-Temp-Access-Ticket"
+            guard !parameter.jsTrimmed.isEmpty, parameter != "Lucky-Admin-Token" else {
+                throw LuckyError("服务端返回的临时票据参数无效")
+            }
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "POST",
+                path: "/api/temp-access-tickets") else { throw error }
+        }
+        guard let url = DockerImageUpgradeProtocol.socketURL(baseURL: baseURL, token: credential,
+            image: image, credentialParameter: parameter) else {
+            throw LuckyError("服务地址无效，无法检查镜像更新")
+        }
+        return url
+    }
+
     static func checkImageUpgrade(
         _ imageRef: String,
         onProgress: (@Sendable (DockerImageUpgradeProgress) -> Void)? = nil
@@ -1617,7 +1646,9 @@ enum DockerService {
     /// timeout is enough; progress is followed through `tasks/{id}`.
     @discardableResult
     static func createCompose(_ input: DockerComposeCreateInput) async throws -> JSONValue {
-        try await call("compose/up-async", "POST", body: .value(input.payload))
+        var payload = input.payload.record
+        payload["request_key"] = .string(UUID().uuidString)
+        return try await call("compose/up-async", "POST", body: .value(.object(payload)))
     }
 
     /// `runDockerComposeAction(action, data)`
@@ -1632,8 +1663,16 @@ enum DockerService {
 
     @discardableResult
     static func composeAction(_ action: ComposeAction, _ data: JSONValue) async throws -> JSONValue {
-        try await call(
-            "compose/\(action.rawValue)", "POST", body: .value(data), timeout: action.timeout
+        var payload = data
+        if action == .up {
+            var object = data.record
+            if (object["request_key"]?.stringValue ?? "").isEmpty {
+                object["request_key"] = .string(UUID().uuidString)
+            }
+            payload = .object(object)
+        }
+        return try await call(
+            "compose/\(action.rawValue)", "POST", body: .value(payload), timeout: action.timeout
         )
     }
 
