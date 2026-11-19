@@ -70,12 +70,21 @@ final class LuckyStatusStore {
             // `connect()` bails out without scheduling a reconnect when there is nothing
             // to authenticate with.
             guard !credentials.baseUrl.isEmpty, !credentials.token.isEmpty else { return }
-            guard let url = Self.socketURL(baseUrl: credentials.baseUrl, token: credentials.token) else {
-                error = "实时状态连接失败"
-                return
+            let request: URLRequest
+            do {
+                request = try await Self.socketRequest(baseUrl: credentials.baseUrl, token: credentials.token) {
+                    try await LuckyClient.shared.fetch($0)
+                }
+            } catch {
+                guard !Task.isCancelled, generation == self.generation else { return }
+                self.error = error.luckyMessage("实时状态连接失败")
+                try? await Task.sleep(for: .seconds(delay))
+                delay = min(delay * 2, LuckyStatusConstants.maxReconnectDelay)
+                continue
             }
+            guard !Task.isCancelled, generation == self.generation else { return }
 
-            let socket = session.webSocketTask(with: url)
+            let socket = session.webSocketTask(with: request)
             self.socket = socket
             socket.resume()
 
@@ -205,6 +214,43 @@ final class LuckyStatusStore {
     }
 
     // MARK: - URL
+
+    /// V3's `createTemporaryWebSocketUrl`: exchange the authenticated HTTP request for
+    /// a short-lived ticket. Only an absent ticket route permits the V2 token fallback.
+    static func socketRequest(
+        baseUrl: String, token: String, millis: Int64? = nil,
+        fetch: (LuckyRequest) async throws -> JSONValue
+    ) async throws -> URLRequest {
+        var ticketRequest = LuckyRequest("/api/temp-access-tickets", method: "POST", body: .json(.object([
+            ("method", .string("GET")), ("path", .string("/api/status/ws")), ("query", .object([])),
+        ])))
+        ticketRequest.baseUrl = baseUrl
+        ticketRequest.token = token
+        let payload: JSONValue
+        do {
+            payload = try await fetch(ticketRequest)
+        } catch let error as LuckyError where error.statusCode == 404 || error.statusCode == 405 {
+            guard let url = socketURL(baseUrl: baseUrl, token: token, millis: millis) else {
+                throw LuckyError("实时状态连接失败")
+            }
+            var request = URLRequest(url: url)
+            // Native clients can supply a header as well, unlike browser WebSockets.
+            request.setValue(token, forHTTPHeaderField: "Lucky-Admin-Token")
+            return request
+        }
+        guard let ticket = payload["ticket"]?.stringValue, !ticket.jsTrimmed.isEmpty,
+              let legacyURL = socketURL(baseUrl: baseUrl, token: "", millis: millis),
+              var components = URLComponents(url: legacyURL, resolvingAgainstBaseURL: false) else {
+            throw LuckyError("申请临时访问票据失败")
+        }
+        let parameter = payload["ticketParam"]?.stringValue
+        components.queryItems = [
+            URLQueryItem(name: parameter?.isEmpty == false ? parameter! : "Lucky-Temp-Access-Ticket", value: ticket),
+            URLQueryItem(name: "_", value: String(millis ?? Int64(Date().timeIntervalSince1970 * 1000))),
+        ]
+        guard let url = components.url else { throw LuckyError("实时状态连接失败") }
+        return URLRequest(url: url)
+    }
 
     /// `statusSocketUrl()` — `http`→`ws`, `https`→`wss`, token in the query string
     /// because there is no way to set headers on a browser WebSocket. The `_` parameter is

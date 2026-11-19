@@ -748,7 +748,17 @@ enum DockerService {
 
     /// `getDockerContainerOrderMapping()`
     static func containerOrderMapping() async throws -> JSONValue {
-        try await call("containers/order-mapping")
+        do {
+            return try await call("containers/order-mapping")
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "GET",
+                path: "/api/docker/containers/order-mapping") else { throw error }
+            let raw = try await call("containers/sort-config")
+            var value = raw.record
+            value["containerGroupMap"] = raw["mapping"] ?? .object([])
+            value["orderList"] = raw["sort"]?["flat_order"] ?? .array([])
+            return .object(value)
+        }
     }
 
     /// `updateDockerContainerOrderMapping(containerGroupMap, orderList)` — both halves are sent
@@ -767,10 +777,18 @@ enum DockerService {
     /// `setDockerContainerGroup(containerName, groupKey)` — keyed by **name**, not id.
     @discardableResult
     static func setContainerGroup(containerName: String, groupKey: String) async throws -> JSONValue {
-        try await call("containers/set-group", "POST", body: .value(.object([
+        let body = LuckyBody.value(.object([
             ("containerName", .string(containerName)),
             ("groupKey", .string(groupKey)),
-        ])))
+        ]))
+        do {
+            return try await call("containers/set-group", "POST", body: body)
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "POST",
+                path: "/api/docker/containers/set-group") else { throw error }
+            // V3 replaces the V2 route; retry only after an explicit route rejection.
+            return try await call("containers/group", "PUT", body: body)
+        }
     }
 
     /// `switchDockerContainerVersion(containerIds, targetImageRef)` — recreates every listed
@@ -1083,12 +1101,51 @@ enum DockerService {
         upgradeStandalone: Bool = true,
         containerIds: JSONValue = .null
     ) async throws -> JSONValue {
-        try await call("images/upgrade-containers", "POST", body: .value(.object([
+        let payload = JSONValue.object([
             ("image_ref", .string(imageRef)),
             ("upgrade_compose", .bool(upgradeCompose)),
             ("upgrade_standalone", .bool(upgradeStandalone)),
             ("container_ids", containerIds),
-        ])), timeout: 300)
+        ])
+        do {
+            return try await call("images/upgrade-containers", "POST", body: .value(payload), timeout: 300)
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "POST",
+                path: "/api/docker/images/upgrade-containers") else { throw error }
+        }
+        // V3 requires a revision-bound plan. Never translate a selection into "all".
+        guard case .array(let selected) = containerIds, !selected.isEmpty,
+              selected.allSatisfy({ !($0.stringValue ?? "").isEmpty }) else {
+            throw DockerAPICompatibility.unsupported("未指定容器的镜像更新")
+        }
+        let preview = try await call("images/upgrade-plan", "POST", body: .value(payload), timeout: 35)
+        let plan = preview["plan"] ?? .null
+        let request = plan["request"] ?? .null
+        guard preview["schema_version"]?.asInt == 1,
+              let revision = plan["revision"]?.stringValue, !revision.isEmpty,
+              request["plan_revision"]?.stringValue == revision,
+              request["image_ref"] == payload["image_ref"],
+              request["upgrade_compose"] == payload["upgrade_compose"],
+              request["upgrade_standalone"] == payload["upgrade_standalone"],
+              let planned = request["container_ids"]?.arrayValue,
+              Set(planned.compactMap(\.stringValue)) == Set(selected.compactMap(\.stringValue)),
+              planned.count == selected.count,
+              let rows = plan["rows"]?.arrayValue, !rows.isEmpty,
+              rows.allSatisfy({ ["upgrade", "rebuild"].contains($0["action"]?.stringValue ?? "") }) else {
+            throw LuckyError("服务端返回的更新计划无效或改变了所选容器，请在 Web 管理端核对")
+        }
+        var execution = request.record
+        execution["request_key"] = .string(UUID().uuidString)
+        let queued = try await call("images/upgrade-containers-async", "POST", body: .value(.object(execution)))
+        guard let id = queued["task_id"]?.stringValue, !id.isEmpty else {
+            throw LuckyError("服务端未返回更新任务 ID，请核对任务列表，勿重复提交")
+        }
+        let completed = try await waitForTask(id)
+        let task = DockerImageUpgradeProtocol.unwrap(completed, keys: ["task", "data"])
+        guard let result = task["result"], result.isRecord else {
+            throw LuckyError("更新任务未返回执行结果，请核对任务列表")
+        }
+        return result
     }
 
     /// `removeDockerImage(reference, force)` — two branches over one argument.

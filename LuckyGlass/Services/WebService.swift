@@ -208,10 +208,15 @@ enum WebService {
     }
 
     static func rule(_ key: String) async throws -> JSONValue {
-        JSONUnwrap.nestedRecord(
-            try await client.fetch("/api/webservice/rule/\(LuckyQuery.escape(key))"),
-            keys: ["rule", "data"]
-        )
+        let payload = try await client.fetch("/api/webservice/rule/\(LuckyQuery.escape(key))")
+        var record = JSONUnwrap.nestedRecord(payload, keys: ["rule", "data"]).record
+        // V3 returns the optimistic-lock token beside `rule`. Existing callers edit
+        // and PUT this record (including ProxyList); keep the token in the documented
+        // write field rather than dropping it while unwrapping. V2 has no token.
+        if case .string(let version)? = payload["version"], payload["rule"]?.isRecord == true {
+            record["ExpectedVersion"] = .string(version)
+        }
+        return .object(record)
     }
 
     @discardableResult
@@ -408,18 +413,29 @@ enum WebService {
 
     // MARK: - Module settings
 
-    /// The read and the write use different paths: `/modulesettings/frontend` returns the
-    /// settings the console shows, `/modulesettings` accepts them back.
+    /// V2 separates frontend reads from writes; V3 uses `/settings` for both.
+    /// Only a missing route justifies trying the documented alternative.
     static func settings() async throws -> JSONValue {
-        JSONUnwrap.nestedRecord(
-            try await client.fetch("/api/webservice/modulesettings/frontend"),
-            keys: ["settings", "data"]
-        )
+        let path = "/api/webservice/modulesettings/frontend"
+        let payload: JSONValue
+        do {
+            payload = try await client.fetch(path)
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "GET", path: path) else { throw error }
+            payload = try await client.fetch("/api/webservice/settings")
+        }
+        return JSONUnwrap.nestedRecord(payload, keys: ["settings", "data"])
     }
 
     @discardableResult
     static func updateSettings(_ value: JSONValue) async throws -> JSONValue {
-        try await client.fetch("/api/webservice/modulesettings", method: "PUT", body: .value(value))
+        let path = "/api/webservice/modulesettings"
+        do {
+            return try await client.fetch(path, method: "PUT", body: .value(value))
+        } catch {
+            guard DockerAPICompatibility.isUnavailableRoute(error, method: "PUT", path: path) else { throw error }
+            return try await client.fetch("/api/webservice/settings", method: "PUT", body: .value(value))
+        }
     }
 
     // MARK: - Logs
