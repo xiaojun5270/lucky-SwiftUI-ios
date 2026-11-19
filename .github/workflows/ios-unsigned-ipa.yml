@@ -44,6 +44,7 @@ jobs:
           bash Tests/AccountSwitching/run.sh
           python3 Tests/AccountUI/checks.py
           python3 Tests/DashboardLayout/checks.py
+          python3 Tests/DockerLayout/checks.py
 
       - name: Inspect project
         run: |

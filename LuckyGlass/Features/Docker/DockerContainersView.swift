@@ -32,7 +32,8 @@ struct DockerContainersView: View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.containers.emptyMessage,
                        symbol: DockerView.containers.symbol,
-                       loadingText: "正在读取容器", refresh: refresh) {
+                       loadingText: "正在读取容器",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
             LuckySectionHeader(title: DockerView.containers.title,
                                symbol: DockerView.containers.symbol,
                                iconRole: DockerView.containers.iconRole) {
@@ -111,24 +112,29 @@ private struct DockerContainerCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            Button {
-                actions.menu(row.menu)
-            } label: {
-                heading
+        // Keep the shared card and horizontal inset unchanged; only container rhythm is halved.
+        LuckyCard(padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+                Button {
+                    actions.menu(row.menu)
+                } label: {
+                    heading
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("打开容器 \(row.displayName) 操作菜单")
+                ContainerStatsGrid(stats: stat)
+                LuckyHairline()
+                commands
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("打开容器 \(row.displayName) 操作菜单")
-            ContainerStatsGrid(stats: stat)
-            LuckyHairline()
-            commands
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 
     private var heading: some View {
         HStack(spacing: 11) {
             ContainerArtwork(icon: row.icon, running: row.running, size: 48)
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.xs + 2) {
+            VStack(alignment: .leading, spacing: (LuckyTheme.Space.xs + 2) / 2) {
                 Text(row.displayName)
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundStyle(LuckyTheme.textPrimary)
@@ -193,7 +199,7 @@ private struct DockerContainerCard: View {
 
     private var commandLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s))
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))
             : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
     }
 }

@@ -206,7 +206,7 @@ struct ContainerStatsGrid: View {
 
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
-                                 count: columnCount), spacing: LuckyTheme.Space.s) {
+                                 count: columnCount), spacing: LuckyTheme.Space.s / 2) {
             ForEach(metrics) { cell($0) }
         }
     }
@@ -228,7 +228,7 @@ struct ContainerStatsGrid: View {
     }
 
     private func cell(_ metric: Metric) -> some View {
-        VStack(spacing: LuckyTheme.Space.s) {
+        VStack(spacing: LuckyTheme.Space.s / 2) {
             HStack(spacing: LuckyTheme.Space.xs) {
                 Image(systemName: metric.symbol)
                     .font(LuckyTheme.Text.captionMedium)
@@ -248,8 +248,10 @@ struct ContainerStatsGrid: View {
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, LuckyTheme.Space.s)
-        .padding(.vertical, LuckyTheme.Space.m)
-        .frame(maxWidth: .infinity, minHeight: 72)
+        .padding(.vertical, LuckyTheme.Space.m / 2)
+        // Size to the unchanged fonts plus explicit padding, including at accessibility sizes.
+        // The old 72 pt floor would silently reintroduce vertical whitespace after compaction.
+        .frame(maxWidth: .infinity)
         .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(metric.label) \(metric.value)")
