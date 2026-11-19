@@ -43,6 +43,7 @@ jobs:
           bash Tests/StatusCompatibility/run.sh
           bash Tests/AccountSwitching/run.sh
           python3 Tests/AccountUI/checks.py
+          python3 Tests/DashboardLayout/checks.py
 
       - name: Inspect project
         run: |

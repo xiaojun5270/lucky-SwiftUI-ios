@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// A denser rhythm for the overview only; shared page/card defaults stay unchanged.
+private enum DashboardLayout {
+    static let cardGap: CGFloat = 12
+    static let cardInset: CGFloat = 12
+    static let contentGap: CGFloat = 10
+}
+
 /// `app/(tabs)/monitor.tsx` — the 总览 tab.
 ///
 /// Two feeds run at once: the status socket publishes live frames and the reverse-proxy rule list
@@ -7,6 +14,45 @@ import SwiftUI
 /// `dockerActive = isFocused && appIsActive`, so a backgrounded app holds no socket and issues no
 /// requests. The socket is the shared reference-counted stream, so leaving the tab drops the
 /// connection but keeps the last frame on screen instead of blanking the charts.
+
+/// Dashboard headers share one optical size without changing headers elsewhere in the app.
+private struct DashboardSectionHeader<Trailing: View>: View {
+    var title: String
+    var symbol: String
+    var iconRole: LuckyIconRole
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                heading
+                Spacer(minLength: LuckyTheme.Space.s)
+                trailing()
+            }
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                heading
+                trailing()
+            }
+        }
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var heading: some View {
+        HStack(spacing: 10) {
+            LuckyIconTile(symbol: symbol, size: 32, glyph: 16, role: iconRole)
+            Text(title)
+                .font(LuckyTheme.Text.cardTitle)
+                .foregroundStyle(LuckyTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private extension DashboardSectionHeader where Trailing == EmptyView {
+    init(title: String, symbol: String, iconRole: LuckyIconRole) {
+        self.init(title: title, symbol: symbol, iconRole: iconRole) { EmptyView() }
+    }
+}
 
 /// `webRuleText(rule, keys, fallback)`: the first key holding a string or a number, as a string.
 /// Deliberately not `JSONUnwrap.pick`, which also accepts arrays and would render a list-valued
@@ -92,6 +138,7 @@ private struct DashboardHostPanel: View {
     var body: some View {
         LuckyCard(padding: 0, spacing: 0) {
             HStack(spacing: LuckyTheme.Space.m) {
+                LuckyIconTile(symbol: LuckySymbol.monitor, size: 32, glyph: 16, role: .system)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("运行状态")
                         .font(LuckyTheme.Text.cardTitle)
@@ -105,7 +152,7 @@ private struct DashboardHostPanel: View {
                           tone: connected ? .ok : .warning,
                           symbol: connected ? "checkmark" : "arrow.clockwise")
             }
-            .padding(LuckyTheme.Space.cardInset)
+            .padding(DashboardLayout.cardInset)
 
             resourceLayout {
                 LuckyLoadGauge(label: "系统 CPU", value: status?.usedCpu)
@@ -113,7 +160,7 @@ private struct DashboardHostPanel: View {
                 LuckyLoadGauge(label: "系统内存", value: status == nil ? nil : memory)
             }
             .padding(.horizontal, LuckyTheme.Space.l)
-            .padding(.vertical, LuckyTheme.Space.l)
+            .padding(.vertical, LuckyTheme.Space.s)
 
             LuckyHairline()
 
@@ -163,7 +210,7 @@ private struct DashboardHostPanel: View {
     }
 
     private var metricDivider: some View {
-        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 54)
+        Rectangle().fill(LuckyTheme.separator).frame(width: 1, height: 40)
     }
 }
 
@@ -175,14 +222,15 @@ private struct DashboardQuickLink: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: LuckyTheme.Space.s) {
-                LuckyIconTile(symbol: symbol, size: 46, glyph: 21, role: iconRole)
+            VStack(spacing: 6) {
+                LuckyIconTile(symbol: symbol, size: 40, glyph: 19, role: iconRole)
                 Text(title)
                     .font(LuckyTheme.Text.captionMedium)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(LuckyTheme.textPrimary)
             }
-            .frame(maxWidth: .infinity, minHeight: 82)
+            .frame(minWidth: LuckyTheme.Space.touchTarget, maxWidth: .infinity, minHeight: 64)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -199,8 +247,8 @@ private struct DashboardShortcuts: View {
     }
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.l) {
-            LuckySectionHeader(title: "快捷入口") {
+        LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
+            DashboardSectionHeader(title: "快捷入口", symbol: "square.grid.2x2", iconRole: .system) {
                 Button {
                     navigator.selection = .services
                 } label: {
@@ -215,16 +263,16 @@ private struct DashboardShortcuts: View {
                 .foregroundStyle(LuckyTheme.accent)
             }
             LazyVGrid(columns: columns, spacing: LuckyTheme.Space.s) {
-                DashboardQuickLink(title: "反向代理", symbol: "globe.asia.australia", iconRole: .web) {
+                DashboardQuickLink(title: "反向代理", symbol: "network", iconRole: .web) {
                     navigator.push(.webservice)
                 }
-                DashboardQuickLink(title: "Docker", symbol: "shippingbox", iconRole: .docker) {
+                DashboardQuickLink(title: "Docker", symbol: "cube.transparent", iconRole: .docker) {
                     navigator.push(.docker())
                 }
-                DashboardQuickLink(title: "动态域名", symbol: "arrow.triangle.2.circlepath", iconRole: .ddns) {
+                DashboardQuickLink(title: "动态域名", symbol: "globe.asia.australia", iconRole: .ddns) {
                     navigator.push(.service(.ddns))
                 }
-                DashboardQuickLink(title: "SSL 证书", symbol: "checkmark.shield", iconRole: .security) {
+                DashboardQuickLink(title: "SSL 证书", symbol: "lock.shield", iconRole: .security) {
                     navigator.push(.service(.ssl))
                 }
             }
@@ -270,7 +318,7 @@ private struct ReverseProxyCard: View {
     }
 
     var body: some View {
-        LuckyCard {
+        LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
             header
             statsStrip
             if !preview.isEmpty {
@@ -292,7 +340,7 @@ private struct ReverseProxyCard: View {
         HStack(spacing: LuckyTheme.Space.s) {
             Button(action: open) {
                 HStack(spacing: 10) {
-                    LuckyIconTile(symbol: "globe.asia.australia", size: 42, glyph: 21, role: .web)
+                    LuckyIconTile(symbol: "network", size: 32, glyph: 16, role: .web)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("反向代理")
                             .font(LuckyTheme.Text.cardTitle)
@@ -339,7 +387,7 @@ private struct ReverseProxyCard: View {
             statColumn("TLS 监听", ready ? String(tlsRules.count) : "--",
                        tint: LuckyTheme.textPrimary, divided: true)
         }
-        .frame(minHeight: 66)
+        .frame(minHeight: 56)
         .background(ConcentricRectangle().fill(LuckyTheme.surfaceRaised))
         .clipShape(.rect(cornerRadius: LuckyTheme.Radius.panel))
     }
@@ -524,7 +572,7 @@ struct DashboardScreen: View {
     private var active: Bool { navigator.selection == .dashboard && phase == .active }
 
     var body: some View {
-        LuckyPage(spacing: LuckyTheme.Space.section, refresh: { await refreshAll() }) {
+        LuckyPage(spacing: DashboardLayout.cardGap, refresh: { await refreshAll() }) {
             LuckyScreenHeader(title: "总览", subtitle: accountDisplayName,
                               subtitleAction: { showingAccounts = true }) {
                 Button { navigator.selection = .settings } label: {
@@ -551,7 +599,7 @@ struct DashboardScreen: View {
             DashboardLiveReader { statusStore in
                 if let status = statusStore.data {
                     if horizontalSizeClass == .regular, !dynamicTypeSize.isAccessibilitySize {
-                        HStack(alignment: .top, spacing: LuckyTheme.Space.section) {
+                        HStack(alignment: .top, spacing: DashboardLayout.cardGap) {
                             systemPanel(status)
                             networkPanel(status)
                         }
@@ -579,8 +627,8 @@ struct DashboardScreen: View {
     /// 系统资源 — `TrendChart maxValue={100}` over the socket's 90-sample history. The original
     /// draws bare polylines; area-filling the primary line is the one visual liberty taken here.
     private func systemPanel(_ status: LuckyLiveStatus) -> some View {
-        LuckyCard {
-            LuckySectionHeader(title: "系统资源", symbol: LuckySymbol.cpu, iconRole: .system) {
+        LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
+            DashboardSectionHeader(title: "系统资源", symbol: LuckySymbol.cpu, iconRole: .system) {
                 LuckyChip(text: "\(status.history.count) 个采样", tone: .idle)
             }
             LuckyHairline()
@@ -612,8 +660,8 @@ struct DashboardScreen: View {
     private func networkPanel(_ status: LuckyLiveStatus) -> some View {
         let inSpeed = Format.bytes(status.lastNetInSpeed, speed: true)
         let outSpeed = Format.bytes(status.lastNetOutSpeed, speed: true)
-        return LuckyCard {
-            LuckySectionHeader(title: "网络趋势", symbol: LuckySymbol.network, iconRole: .network)
+        return LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
+            DashboardSectionHeader(title: "网络趋势", symbol: LuckySymbol.network, iconRole: .network)
             LuckyHairline()
             LuckyWrap(spacing: LuckyTheme.Space.m, lineSpacing: 6) {
                 DashboardLegend(label: "下载 \(inSpeed)", tone: .info)
@@ -662,8 +710,8 @@ struct DashboardScreen: View {
     /// on a JavaScript number is `JSONSerializer.numberString`, which is why these stay `Double`s
     /// instead of being rounded to `Int` for display.
     private func serverPanel(_ status: LuckyLiveStatus) -> some View {
-        LuckyCard {
-            LuckySectionHeader(title: "服务器信息", symbol: LuckySymbol.disk, iconRole: .server)
+        LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
+            DashboardSectionHeader(title: "服务器信息", symbol: LuckySymbol.disk, iconRole: .server)
             LuckyHairline()
             LuckyTileGrid(minimum: 135, spacing: LuckyTheme.Space.s) {
                 serverFact("进程启动", status.runTime.isEmpty ? "--" : status.runTime)
@@ -744,7 +792,7 @@ private struct DashboardScreenPreviews: PreviewProvider {
 
     private static var overview: some View {
         NavigationStack {
-            LuckyPage(spacing: LuckyTheme.Space.section) {
+            LuckyPage(spacing: DashboardLayout.cardGap) {
                 LuckyScreenHeader(title: "总览", subtitle: "lucky.local") {
                     LuckyMark(size: 46)
                 }
