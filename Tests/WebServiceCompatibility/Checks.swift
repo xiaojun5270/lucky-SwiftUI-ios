@@ -72,7 +72,10 @@ actor LuckyClient {
         }
         await client.reset([missing("GET", "/api/webservice/modulesettings/frontend"), .failure(LuckyAuthError())])
         do { _ = try await WebService.settings(); check("fallback failure propagates", false) }
-        catch { check("fallback failure is not retried", error is LuckyAuthError && (await client.requests).count == 2) }
+        catch {
+            let count = await client.requests.count
+            check("fallback failure is not retried", error is LuckyAuthError && count == 2)
+        }
         await client.reset([.success(.object([("ret", .int(0)), ("rule", storedRule)]))])
         check("V2 rule has no fabricated version", try await WebService.rule("r") == storedRule)
         await client.reset([.success(.object([("ret", .int(0)), ("ruleList", .array([storedRule]))]))])
