@@ -202,27 +202,47 @@ struct LuckyHairline: View {
     }
 }
 
-/// JSON, YAML, compose files and log tails. Sunken rather than raised: the response body is
-/// evidence, not a control, and it should read as a well in the card.
+/// Formatted data viewer: auto-unfolds JSON payloads into structured form rows,
+/// while keeping raw text / logs / YAML readable in a sunken well.
 struct LuckyCodeBlock: View {
     var text: String
     /// `nil` grows with the content; the debugger caps it and lets the user expand.
     var maxHeight: CGFloat? = 260
     var small: Bool = false
 
-    var body: some View {
-        ScrollView([.vertical, .horizontal]) {
-            Text(text.isEmpty ? "—" : text)
-                .font(small ? LuckyTheme.Text.codeSmall : LuckyTheme.Text.code)
-                .foregroundStyle(LuckyTheme.textPrimary)
-                .textSelection(.enabled)
-                .padding(LuckyTheme.Space.m)
-                .frame(minWidth: 0, alignment: .topLeading)
+    private var parsedJson: JSONValue? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
+                || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
+            return nil
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(maxHeight: maxHeight)
-        .background(ConcentricRectangle().fill(LuckyTheme.surfaceSunken))
-        .scrollBounceBehavior(.basedOnSize)
+        guard let parsed = try? JSONParser.parse(trimmed),
+              parsed.isRecord || parsed.isArray else {
+            return nil
+        }
+        return parsed
+    }
+
+    var body: some View {
+        if let json = parsedJson {
+            StructuredDataView(value: json)
+                .padding(LuckyTheme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ConcentricRectangle().fill(LuckyTheme.surfaceSunken))
+        } else {
+            ScrollView([.vertical, .horizontal]) {
+                Text(text.isEmpty ? "—" : text)
+                    .font(small ? LuckyTheme.Text.codeSmall : LuckyTheme.Text.code)
+                    .foregroundStyle(LuckyTheme.textPrimary)
+                    .textSelection(.enabled)
+                    .padding(LuckyTheme.Space.m)
+                    .frame(minWidth: 0, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxHeight: maxHeight)
+            .background(ConcentricRectangle().fill(LuckyTheme.surfaceSunken))
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 }
 

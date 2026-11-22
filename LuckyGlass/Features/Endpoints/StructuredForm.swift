@@ -133,6 +133,63 @@ enum LuckyFieldName {
         "SyncInfo": "同步信息",
         "SyncClients": "同步客户端",
         "ACMEing": "正在签发",
+        "ip": "IP 地址",
+        "IP": "IP 地址",
+        "port": "端口",
+        "Port": "端口",
+        "status": "状态",
+        "Status": "状态",
+        "state": "运行状态",
+        "State": "运行状态",
+        "result": "执行结果",
+        "Result": "执行结果",
+        "version": "版本号",
+        "Version": "版本号",
+        "type": "类型",
+        "Type": "类型",
+        "url": "URL 地址",
+        "Url": "URL 地址",
+        "URL": "URL 地址",
+        "host": "主机地址",
+        "Host": "主机地址",
+        "hostname": "主机名",
+        "Hostname": "主机名",
+        "mac": "MAC 地址",
+        "Mac": "MAC 地址",
+        "MAC": "MAC 地址",
+        "network": "网络模式",
+        "Network": "网络模式",
+        "gateway": "网关地址",
+        "Gateway": "网关地址",
+        "subnet": "子网掩码",
+        "Subnet": "子网掩码",
+        "protocol": "网络协议",
+        "Protocol": "网络协议",
+        "method": "请求方法",
+        "Method": "请求方法",
+        "account": "账号",
+        "Account": "账号",
+        "remark": "备注名称",
+        "RuleName": "规则名称",
+        "ListenPort": "监听端口",
+        "ListenIP": "监听 IP",
+        "ProxyList": "子规则列表",
+        "ProxyUrl": "目标地址",
+        "Target": "转发目标",
+        "WebServiceType": "服务类型",
+        "DefaultProxy": "默认代理",
+        "EnableTLS": "启用 TLS",
+        "TLS": "TLS 加密",
+        "Locations": "后端目标",
+        "TaskType": "任务类型",
+        "Intervals": "检测间隔",
+        "FirstCheckDelay": "首次延迟",
+        "SyncRecordData": "同步记录",
+        "Callback": "回调设置",
+        "Webhook": "Webhook 通知",
+        "Headers": "请求头",
+        "Params": "参数配置",
+        "Disable": "已停用",
     ]
 }
 
@@ -694,41 +751,70 @@ struct StructuredDataView: View {
             record(object)
         } else if let items = value.arrayValue {
             list(items)
+        } else if let string = value.stringValue,
+                  let parsed = parseJsonString(string) {
+            StructuredDataView(value: parsed, depth: depth + 1)
         } else {
             scalar
         }
+    }
+
+    private func parseJsonString(_ text: String) -> JSONValue? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
+                || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else { return nil }
+        guard let parsed = try? JSONParser.parse(trimmed),
+              parsed.isRecord || parsed.isArray else { return nil }
+        return parsed
     }
 
     private func record(_ object: JSONObject) -> AnyView {
         let entries = object.pairs.filter { !Self.envelopeKeys.contains($0.key) }
         guard !entries.isEmpty else { return AnyView(hint("暂无数据")) }
         return AnyView(
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 7) {
                 ForEach(entries.prefix(Self.cap), id: \.key) { entry in
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(LuckyFieldName.label(entry.key))
-                            .font(LuckyTheme.Text.captionMedium)
-                            .foregroundStyle(LuckyTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        StructuredDataView(value: entry.value, depth: depth + 1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, depth > 0 ? 10 : 0)
-                    // The rule sits outside the padding, at the group's own leading edge — a
-                    // depth marker rather than a table border.
-                    .overlay(alignment: .leading) {
-                        if depth > 0 {
-                            Rectangle()
-                                .fill(LuckyTheme.hairline)
-                                .frame(width: LuckyTheme.strokeWidth)
-                        }
-                    }
+                    entryRow(entry)
                 }
                 if entries.count > Self.cap {
                     note("仅显示前 200 个字段，共 \(entries.count) 个")
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private func entryRow(_ entry: (key: String, value: JSONValue)) -> some View {
+        let isComposite = entry.value.isRecord || entry.value.isArray
+        if isComposite {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(LuckyFieldName.label(entry.key))
+                    .font(LuckyTheme.Text.captionMedium)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                StructuredDataView(value: entry.value, depth: depth + 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, depth > 0 ? 10 : 0)
+            .overlay(alignment: .leading) {
+                if depth > 0 {
+                    Rectangle()
+                        .fill(LuckyTheme.hairline)
+                        .frame(width: LuckyTheme.strokeWidth)
+                }
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                Text(LuckyFieldName.label(entry.key))
+                    .font(LuckyTheme.Text.label)
+                    .foregroundStyle(LuckyTheme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: LuckyTheme.Space.s)
+                StructuredDataView(value: entry.value, depth: depth + 1)
+            }
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func list(_ items: [JSONValue]) -> AnyView {

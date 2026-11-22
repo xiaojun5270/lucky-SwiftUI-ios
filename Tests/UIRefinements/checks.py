@@ -134,6 +134,16 @@ class UIRefinementsChecks(unittest.TestCase):
         screen = source("Features/Docker/DockerScreen.swift")
         self.assertIn("DockerStatsCache.shared", screen)
 
+    def test_structured_form_replaces_raw_json(self):
+        surface = source("Design/LuckySurface.swift")
+        self.assertIn("StructuredDataView(value: json)", surface)
+
+        form = source("Features/Endpoints/StructuredForm.swift")
+        self.assertIn("parseJsonString", form)
+        self.assertIn('"ip": "IP 地址"', form)
+        self.assertIn('"status": "状态"', form)
+        self.assertIn('"RuleName": "规则名称"', form)
+
 
 if __name__ == "__main__":
     unittest.main()
