@@ -123,7 +123,7 @@ private struct DockerContainerCard: View {
                 }
                 .buttonStyle(LuckyPressStyle())
                 .accessibilityLabel("打开容器 \(row.displayName) 操作菜单")
-                ContainerStatsGrid(stats: stat)
+                ContainerStatsGrid(stats: stat).equatable()
                 LuckyHairline()
                 commands
             }

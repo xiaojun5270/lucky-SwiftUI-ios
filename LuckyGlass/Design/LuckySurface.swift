@@ -32,6 +32,7 @@ struct LuckyCard<Content: View>: View {
                     lineWidth: LuckyTheme.strokeWidth
                 )
             )
+            .compositingGroup()
             .shadow(
                 color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.035),
                 radius: colorScheme == .dark ? 12 : 8,

@@ -40,7 +40,14 @@ final class DockerIconLoader {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 200
-            guard status < 400, let image = UIImage(data: data) else {
+            guard status < 400 else {
+                failures.insert(icon)
+                return
+            }
+            let decoded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                UIImage(data: data)
+            }.value
+            guard let image = decoded else {
                 failures.insert(icon)
                 return
             }
@@ -179,9 +186,13 @@ struct ContainerArtwork: View {
 
 /// Six equal cells always fill complete rows. At the default text size, each column pairs a
 /// resource: CPU/memory, download/upload, and disk reads/writes.
-struct ContainerStatsGrid: View {
+struct ContainerStatsGrid: View, Equatable {
     var stats: DockerStatRow?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    static func == (lhs: ContainerStatsGrid, rhs: ContainerStatsGrid) -> Bool {
+        lhs.stats == rhs.stats
+    }
 
     private var columnCount: Int {
         if dynamicTypeSize.isAccessibilitySize { return 1 }

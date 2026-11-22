@@ -91,6 +91,29 @@ class UIRefinementsChecks(unittest.TestCase):
         log = source("Design/LuckyLogView.swift")
         self.assertIn(".lineSpacing(2)", log)
 
+    def test_frameless_solid_icons(self):
+        iconography = source("Design/LuckyIconography.swift")
+        self.assertIn("static func solid(_ symbol: String) -> String", iconography)
+        self.assertIn('"cube.transparent": "cube.fill"', iconography)
+        self.assertIn('"globe.asia.australia": "globe.asia.australia.fill"', iconography)
+        self.assertIn('"lock.shield": "lock.shield.fill"', iconography)
+
+        # LuckyFunctionIcon must render directly without a RoundedRectangle tile/plate
+        icon_func = iconography.split("struct LuckyFunctionIcon: View", 1)[1].split("extension TunnelKind", 1)[0]
+        self.assertNotIn("RoundedRectangle", icon_func)
+        self.assertIn("Image(systemName: solidSymbol)", icon_func)
+
+    def test_performance_optimizations(self):
+        surface = source("Design/LuckySurface.swift")
+        self.assertIn(".compositingGroup()", surface)
+
+        controls = source("Features/Docker/DockerControls.swift")
+        self.assertIn("Task.detached(priority: .userInitiated)", controls)
+        self.assertIn("struct ContainerStatsGrid: View, Equatable", controls)
+
+        containers = source("Features/Docker/DockerContainersView.swift")
+        self.assertIn("ContainerStatsGrid(stats: stat).equatable()", containers)
+
 
 if __name__ == "__main__":
     unittest.main()

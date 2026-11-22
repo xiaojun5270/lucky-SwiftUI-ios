@@ -111,12 +111,44 @@ enum LuckySymbol {
     static func module(_ key: String) -> String {
         moduleSymbols[key] ?? "circle.grid.2x2"
     }
+
+    // MARK: - Solid Glyph Mapping
+
+    /// Maps wireframe and hollow glyphs to their bold, solid (.fill) equivalents for modern, frameless presentation.
+    static func solid(_ symbol: String) -> String {
+        switch symbol {
+        case "cube.transparent": "cube.fill"
+        case "globe.asia.australia": "globe.asia.australia.fill"
+        case "lock.shield": "lock.shield.fill"
+        case "checkmark.shield": "checkmark.shield.fill"
+        case "cloud": "cloud.fill"
+        case "shippingbox": "shippingbox.fill"
+        case "internaldrive": "internaldrive.fill"
+        case "cpu": "cpu.fill"
+        case "memorychip": "memorychip.fill"
+        case "gearshape": "gearshape.fill"
+        case "gearshape.2": "gearshape.2.fill"
+        case "doc.text": "doc.text.fill"
+        case "curlybraces.square": "wrench.and.screwdriver.fill"
+        case "person.crop.circle": "person.crop.circle.fill"
+        case "person.badge.key": "person.badge.key.fill"
+        case "square.grid.2x2": "square.grid.2x2.fill"
+        case "folder": "folder.fill"
+        case "archivebox": "archivebox.fill"
+        case "tray.and.arrow.down": "tray.and.arrow.down.fill"
+        case "stop.circle": "stop.circle.fill"
+        case "arrow.down.circle": "arrow.down.circle.fill"
+        case "arrow.up.circle": "arrow.up.circle.fill"
+        case "point.3.connected.trianglepath.dotted": "point.3.filled.connected.trianglepath.dotted"
+        case "trash": "trash.fill"
+        case "shield.lefthalf.filled": "shield.fill"
+        default:
+            return symbol
+        }
+    }
 }
 
-/// A softly tinted icon plate; saturated fills are reserved for prominent actions.
-///
-/// Not glass, deliberately — a list screen can show thirty of these, and thirty glass plates inside
-/// a scroll view is the exact pitfall the design system exists to avoid.
+/// A pure solid symbol rendered directly without an enclosing plate or outer box.
 struct LuckyIconTile: View {
     var symbol: String
     var size: CGFloat = 38
@@ -134,6 +166,7 @@ struct LuckyIconTile: View {
 
 /// The colour-based variant is used by controls whose colour is supplied directly instead of via
 /// `LuckyTone` (for example container actions derived from their current state).
+/// Renders clean solid SF Symbols without an enclosing box/frame.
 struct LuckyFunctionIcon: View {
     var symbol: String
     var size: CGFloat = 38
@@ -141,15 +174,19 @@ struct LuckyFunctionIcon: View {
     var color: Color = LuckyIconRole.neutral.color
     var filled: Bool = false
 
+    private var solidSymbol: String {
+        LuckySymbol.solid(symbol)
+    }
+
+    private var opticalGlyphSize: CGFloat {
+        max(glyph, size * 0.62)
+    }
+
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(filled ? color : color.opacity(0.11))
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: glyph, weight: .semibold))
-                    .foregroundStyle(filled ? LuckyTheme.textOnAccent : color)
-            )
+        Image(systemName: solidSymbol)
+            .font(.system(size: opticalGlyphSize, weight: .bold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size, alignment: .center)
             .accessibilityHidden(true)
     }
 }

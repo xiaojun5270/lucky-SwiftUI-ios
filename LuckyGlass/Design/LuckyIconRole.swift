@@ -44,24 +44,25 @@ enum LuckyIconRole: String, CaseIterable, Sendable {
     /// feature supplies a role, rather than silently adding another blue icon.
     static func symbol(_ symbol: String) -> LuckyIconRole {
         switch symbol {
-        case "cpu", "memorychip", "waveform.path.ecg", "speedometer", "gauge": .system
+        case "cpu", "cpu.fill", "memorychip", "memorychip.fill", "waveform.path.ecg", "speedometer", "gauge": .system
         case "server.rack": .server
         case "network", "wifi", "cable.connector", "link", "arrow.left.arrow.right": .network
+        case "globe.asia.australia", "globe.asia.australia.fill": .ddns
         case "internaldrive", "internaldrive.fill", "externaldrive", "folder",
              "folder.fill", "folder.badge.person.crop", "externaldrive.badge.icloud": .storage
-        case "lock", "lock.fill", "lock.shield", "lock.shield.fill", "checkmark.shield",
-             "shield.lefthalf.filled", "key", "key.fill", "person.badge.key": .security
+        case "lock", "lock.fill", "lock.shield", "lock.shield.fill", "checkmark.shield", "checkmark.shield.fill",
+             "shield.lefthalf.filled", "shield.fill", "key", "key.fill", "person.badge.key", "person.badge.key.fill": .security
         case "point.3.connected.trianglepath.dotted", "point.3.filled.connected.trianglepath.dotted",
              "antenna.radiowaves.left.and.right", "dot.radiowaves.left.and.right": .tunnels
-        case "cloud": .cloudflared
-        case "cube.transparent", "shippingbox": .docker
+        case "cloud", "cloud.fill": .cloudflared
+        case "cube.transparent", "cube.fill", "shippingbox", "shippingbox.fill": .docker
         case "point.topleft.down.to.point.bottomright.curvepath", "arrow.triangle.branch": .web
         case "photo.on.rectangle.angled": .media
         case "flowchart", "clock.arrow.circlepath", "clock", "bolt.fill": .automation
-        case "gearshape", "gearshape.2", "slider.horizontal.3": .settings
-        case "text.alignleft", "doc.text", "terminal": .logs
-        case "person", "person.fill", "person.crop.circle", "person.2", "person.2.wave.2": .account
-        case "curlybraces", "curlybraces.square", "testtube.2", "wrench.and.screwdriver": .tools
+        case "gearshape", "gearshape.fill", "gearshape.2", "gearshape.2.fill", "slider.horizontal.3": .settings
+        case "text.alignleft", "doc.text", "doc.text.fill", "terminal": .logs
+        case "person", "person.fill", "person.crop.circle", "person.crop.circle.fill", "person.2", "person.2.wave.2": .account
+        case "curlybraces", "curlybraces.square", "testtube.2", "wrench.and.screwdriver", "wrench.and.screwdriver.fill": .tools
         case "plus": .create
         case "play.fill": .start
         case "square.and.pencil", "pencil": .edit
