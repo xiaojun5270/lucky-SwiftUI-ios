@@ -14,6 +14,7 @@ struct LuckyCard<Content: View>: View {
     /// "危险操作" confirmation card and for failed-request results.
     var tone: LuckyTone?
     @ViewBuilder var content: () -> Content
+    @Environment(\.colorScheme) private var colorScheme
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -27,9 +28,15 @@ struct LuckyCard<Content: View>: View {
             .clipShape(shape)
             .overlay(
                 shape.strokeBorder(
-                    tone?.tint.opacity(0.42) ?? LuckyTheme.hairline.opacity(0.35),
+                    tone?.tint.opacity(0.42) ?? LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.45 : 0.35),
                     lineWidth: LuckyTheme.strokeWidth
                 )
+            )
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.035),
+                radius: colorScheme == .dark ? 12 : 8,
+                x: 0,
+                y: colorScheme == .dark ? 5 : 3
             )
             // Lets anything inside ask for `ConcentricRectangle()` and get the right inner radius.
             .containerShape(shape)

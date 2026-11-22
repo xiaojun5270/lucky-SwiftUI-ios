@@ -18,6 +18,16 @@ struct WebSubRuleCard: View {
         }
     }
 
+    private var serviceTone: LuckyTone {
+        switch entry.serviceType {
+        case "反向代理": .brand
+        case "文件服务": .info
+        case "重定向", "URL 跳转": .warning
+        case "OAuth 认证": .ok
+        default: .idle
+        }
+    }
+
     private var headerLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.s))
@@ -27,13 +37,21 @@ struct WebSubRuleCard: View {
     private var header: some View {
         headerLayout {
             VStack(alignment: .leading, spacing: 6) {
-                Text(entry.name)
-                    .font(LuckyTheme.Text.cardTitle)
-                    .foregroundStyle(LuckyTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(entry.serviceType) · \(entry.enabled ? "已启用" : "已停用")")
+                HStack(spacing: 6) {
+                    Text(entry.name)
+                        .font(LuckyTheme.Text.cardTitle)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(entry.serviceType)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(serviceTone.tint)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(serviceTone.tint.opacity(0.12), in: .capsule)
+                }
+                Text(entry.enabled ? "已启用" : "已停用")
                     .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .foregroundStyle(entry.enabled ? LuckyTheme.success : LuckyTheme.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
@@ -55,28 +73,37 @@ struct WebSubRuleCard: View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
             // A lone domain already serves as the title when there is no remark.
             if !entry.remark.isEmpty || entry.domains.count != 1 {
-                addressRow("前端", lines: entry.domains, fallback: "未填写前端地址")
+                topologyNode(symbol: "globe", label: "前端入口", lines: entry.domains, fallback: "未填写前端地址", tone: .brand)
             }
             if !entry.locations.isEmpty {
-                addressRow(entry.serviceType == "反向代理" ? "后端" : "目标", lines: entry.locations)
+                topologyNode(symbol: "server.rack", label: entry.serviceType == "反向代理" ? "后端目标" : "转发目标", lines: entry.locations, fallback: "", tone: .info)
             }
         }
+        .padding(LuckyTheme.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LuckyTheme.surfaceSunken, in: .rect(cornerRadius: LuckyTheme.Radius.row))
     }
 
-    private func addressRow(_ title: String, lines: [String], fallback: String = "") -> some View {
-        addressLayout {
-            Text(title)
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textTertiary)
-                .fixedSize()
-            Text(lines.isEmpty ? fallback : lines.joined(separator: "\n"))
-                .font(LuckyTheme.Text.caption.monospaced())
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+    private func topologyNode(symbol: String, label: String, lines: [String], fallback: String, tone: LuckyTone) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tone.tint)
+                .frame(width: 20, height: 20)
+                .background(tone.tint.opacity(0.12), in: .circle)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(LuckyTheme.Text.caption)
+                    .foregroundStyle(LuckyTheme.textTertiary)
+                Text(lines.isEmpty ? fallback : lines.joined(separator: "\n"))
+                    .font(LuckyTheme.Text.code)
+                    .foregroundStyle(LuckyTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var addressLayout: AnyLayout {

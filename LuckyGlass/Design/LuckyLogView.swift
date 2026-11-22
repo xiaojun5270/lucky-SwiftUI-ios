@@ -88,16 +88,29 @@ private struct LuckyLogLine: View, Equatable {
     var needle: String
 
     var body: some View {
-        if needle.isEmpty {
-            Text(verbatim: line)
-                .font(LuckyTheme.Text.code)
-                .foregroundStyle(Self.tone(line)?.tint ?? LuckyTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            Text(attributed(line, needle: needle))
-                .font(LuckyTheme.Text.code)
-                .foregroundStyle(Self.tone(line)?.tint ?? LuckyTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        let tone = Self.tone(line)
+        Group {
+            if needle.isEmpty {
+                Text(verbatim: line)
+                    .font(LuckyTheme.Text.code)
+                    .lineSpacing(2)
+                    .foregroundStyle(tone?.tint ?? LuckyTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(attributed(line, needle: needle))
+                    .font(LuckyTheme.Text.code)
+                    .lineSpacing(2)
+                    .foregroundStyle(tone?.tint ?? LuckyTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, tone != nil ? 6 : 0)
+        .padding(.vertical, tone != nil ? 2 : 0)
+        .background {
+            if let tone {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(tone.tint.opacity(0.10))
+            }
         }
     }
 

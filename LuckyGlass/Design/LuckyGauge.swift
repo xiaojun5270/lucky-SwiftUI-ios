@@ -31,15 +31,16 @@ struct LuckyLoadGauge: View {
         VStack(spacing: LuckyTheme.Space.s) {
             ZStack {
                 Circle()
-                    .stroke(LuckyTheme.surfaceRaised, lineWidth: 9)
+                    .stroke(LuckyTheme.surfaceRaised, lineWidth: 8)
                 Circle()
                     .trim(from: 0, to: progress)
                     .stroke(
                         tone.tint,
-                        style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
-                VStack(spacing: 0) {
+                    .shadow(color: tone.tint.opacity(0.35), radius: 3, x: 0, y: 0)
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(displayValue)
                         .font(LuckyTheme.Text.metricSmall)
                         .foregroundStyle(LuckyTheme.textPrimary)
@@ -48,7 +49,7 @@ struct LuckyLoadGauge: View {
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("%")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(LuckyTheme.textTertiary)
                 }
             }
@@ -110,45 +111,70 @@ struct LuckySparkline: View {
         return max(1, highest) * 1.12
     }
 
+    private var peakTelemetryString: String? {
+        if let ceiling, ceiling > 0 {
+            return "\(Int(ceiling))%"
+        }
+        var highest = 0.0
+        for line in series {
+            for value in line.values.suffix(window) where value.isFinite {
+                highest = max(highest, value)
+            }
+        }
+        guard highest > 0 else { return nil }
+        return "峰值 " + Format.bytes(highest) + "/s"
+    }
+
     var body: some View {
         let scale = peak(in: series)
-        Canvas(rendersAsynchronously: true) { context, size in
-            for fraction in Self.gridlines {
-                var rule = Path()
-                let y = (size.height * fraction).rounded() + 0.5
-                rule.move(to: CGPoint(x: 0, y: y))
-                rule.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(
-                    rule,
-                    with: .color(LuckyTheme.separator),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 4])
-                )
-            }
-            for line in series {
-                guard let plot = plot(line.values.suffix(window), scale: scale, in: size) else {
-                    continue
-                }
-                if line.filled {
-                    let floor = size.height * Self.baseline
-                    var area = plot.path
-                    area.addLine(to: CGPoint(x: plot.lastX, y: floor))
-                    area.addLine(to: CGPoint(x: plot.firstX, y: floor))
-                    area.closeSubpath()
-                    context.fill(
-                        area,
-                        with: .linearGradient(
-                            Gradient(colors: [line.tone.tint.opacity(0.30),
-                                              line.tone.tint.opacity(0.02)]),
-                            startPoint: .zero,
-                            endPoint: CGPoint(x: 0, y: floor)
-                        )
+        ZStack(alignment: .topTrailing) {
+            Canvas(rendersAsynchronously: true) { context, size in
+                for fraction in Self.gridlines {
+                    var rule = Path()
+                    let y = (size.height * fraction).rounded() + 0.5
+                    rule.move(to: CGPoint(x: 0, y: y))
+                    rule.addLine(to: CGPoint(x: size.width, y: y))
+                    context.stroke(
+                        rule,
+                        with: .color(LuckyTheme.separator),
+                        style: StrokeStyle(lineWidth: 1, dash: [3, 4])
                     )
                 }
-                context.stroke(
-                    plot.path,
-                    with: .color(line.tone.tint),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
+                for line in series {
+                    guard let plot = plot(line.values.suffix(window), scale: scale, in: size) else {
+                        continue
+                    }
+                    if line.filled {
+                        let floor = size.height * Self.baseline
+                        var area = plot.path
+                        area.addLine(to: CGPoint(x: plot.lastX, y: floor))
+                        area.addLine(to: CGPoint(x: plot.firstX, y: floor))
+                        area.closeSubpath()
+                        context.fill(
+                            area,
+                            with: .linearGradient(
+                                Gradient(colors: [line.tone.tint.opacity(0.30),
+                                                  line.tone.tint.opacity(0.02)]),
+                                startPoint: .zero,
+                                endPoint: CGPoint(x: 0, y: floor)
+                            )
+                        )
+                    }
+                    context.stroke(
+                        plot.path,
+                        with: .color(line.tone.tint),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                    )
+                }
+            }
+            if let telemetry = peakTelemetryString {
+                Text(telemetry)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(LuckyTheme.textTertiary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(LuckyTheme.surface.opacity(0.85), in: .capsule)
+                    .padding(6)
             }
         }
         .frame(height: height)

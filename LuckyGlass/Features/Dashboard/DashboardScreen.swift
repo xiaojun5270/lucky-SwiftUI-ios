@@ -233,7 +233,14 @@ private struct DashboardQuickLink: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(LuckyTheme.textPrimary)
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 4)
             .frame(minWidth: LuckyTheme.Space.touchTarget, maxWidth: .infinity, minHeight: 64)
+            .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
+            .overlay(
+                RoundedRectangle(cornerRadius: LuckyTheme.Radius.row)
+                    .strokeBorder(LuckyTheme.hairline.opacity(0.35), lineWidth: 1)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.72))

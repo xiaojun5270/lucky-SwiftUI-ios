@@ -69,6 +69,28 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn("DashboardAccountPicker()", settings)
         self.assertIn("showingAccounts = true", settings)
 
+    def test_visual_design_depth_and_telemetry(self):
+        backdrop = source("Design/LuckyBackdrop.swift")
+        self.assertIn("RadialGradient", backdrop)
+        self.assertIn(".blur(radius:", backdrop)
+
+        surface = source("Design/LuckySurface.swift")
+        self.assertIn(".shadow(", surface)
+
+        dashboard = source("Features/Dashboard/DashboardScreen.swift")
+        self.assertIn(".background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))", dashboard)
+
+        gauge = source("Design/LuckyGauge.swift")
+        self.assertIn("peakTelemetryString", gauge)
+        self.assertIn("Text(\"%\")", gauge)
+
+        web = source("Features/WebService/WebSubRuleCard.swift")
+        self.assertIn("topologyNode(", web)
+        self.assertIn("serviceTone", web)
+
+        log = source("Design/LuckyLogView.swift")
+        self.assertIn(".lineSpacing(2)", log)
+
 
 if __name__ == "__main__":
     unittest.main()
