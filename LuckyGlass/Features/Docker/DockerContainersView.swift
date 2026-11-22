@@ -116,11 +116,12 @@ private struct DockerContainerCard: View {
         LuckyCard(padding: 0) {
             VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
                 Button {
+                    LuckyHaptic.light()
                     actions.menu(row.menu)
                 } label: {
                     heading
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LuckyPressStyle())
                 .accessibilityLabel("打开容器 \(row.displayName) 操作菜单")
                 ContainerStatsGrid(stats: stat)
                 LuckyHairline()

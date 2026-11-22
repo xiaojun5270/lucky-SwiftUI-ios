@@ -102,6 +102,9 @@ private struct DockerVolumeCard: View {
     var busy: Bool
     var perform: (DockerVolumeVerb, String) -> Void
 
+    private static let primaryVerbs: [DockerVolumeVerb] = [.backup, .backupList, .export]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     /// `pick(item, ["Name","name"], keyOf(item,index))` — and this string is the key every one of
     /// the eight verbs sends.
     private var name: String {
@@ -115,18 +118,21 @@ private struct DockerVolumeCard: View {
     }
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            heading
-            LuckyHairline()
-            // `basis 120` — wider tiles than Compose's, because these labels are longer.
-            LuckyTileGrid(minimum: 120, spacing: 7) {
-                ForEach(DockerVolumeVerb.allCases) { verb in
-                    DockerIconButton(symbol: verb.symbol, label: verb.label, tint: verb.tint,
-                                     disabled: busy, fluid: true) {
-                        perform(verb, name)
+        LuckyCard(padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+                heading
+                LuckyHairline()
+                commandLayout {
+                    ForEach(Self.primaryVerbs) { verb in
+                        DockerIconButton(symbol: verb.symbol, label: verb.label, tint: verb.tint,
+                                         disabled: busy, fluid: true) {
+                            perform(verb, name)
+                        }
                     }
                 }
             }
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 
@@ -145,7 +151,42 @@ private struct DockerVolumeCard: View {
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            moreMenu
         }
         .frame(minHeight: 48)
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Section("备份管理") {
+                menuButton(.backupUpload)
+                menuButton(.backupRestore)
+                menuButton(.backupCancel)
+            }
+            Section("危险操作") {
+                menuButton(.backupRemove, role: .destructive)
+                menuButton(.remove, role: .destructive)
+            }
+        } label: {
+            LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 16, tone: .idle)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .opacity(busy ? 0.5 : 1)
+        .accessibilityLabel("\(name) 的更多操作")
+    }
+
+    private func menuButton(_ verb: DockerVolumeVerb, role: ButtonRole? = nil) -> some View {
+        Button(role: role) {
+            perform(verb, name)
+        } label: {
+            Label(verb.label, systemImage: verb.symbol)
+        }
+    }
+
+    private var commandLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
     }
 }

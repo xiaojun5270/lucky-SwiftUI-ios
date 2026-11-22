@@ -118,7 +118,10 @@ struct LuckyToolbarButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             ZStack {
                 if loading {
                     ProgressView().controlSize(.small)
@@ -132,7 +135,7 @@ struct LuckyToolbarButton: View {
             .background(LuckyTheme.surface, in: .circle)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.92, pressedOpacity: 0.7))
         .disabled(loading)
         .accessibilityLabel(label)
     }

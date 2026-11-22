@@ -55,6 +55,19 @@ struct LuckyCardButtonStyle: ButtonStyle {
     }
 }
 
+/// Interactive press style for buttons, icon tiles, and list rows that brings native tactile feedback.
+struct LuckyPressStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.985
+    var pressedOpacity: Double = 0.72
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? pressedOpacity : 1)
+            .scaleEffect(configuration.isPressed ? pressedScale : 1)
+            .animation(LuckyTheme.Motion.snap, value: configuration.isPressed)
+    }
+}
+
 /// A nested surface inside a card — a log line, a port mapping, a JSON field. Its corners are
 /// derived from the card's, so the inset never looks like a sticker.
 struct LuckyInset<Content: View>: View {

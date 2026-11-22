@@ -221,7 +221,10 @@ private struct DashboardQuickLink: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.selection()
+            action()
+        } label: {
             VStack(spacing: 6) {
                 LuckyIconTile(symbol: symbol, size: 40, glyph: 19, role: iconRole)
                 Text(title)
@@ -233,7 +236,7 @@ private struct DashboardQuickLink: View {
             .frame(minWidth: LuckyTheme.Space.touchTarget, maxWidth: .infinity, minHeight: 64)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.72))
     }
 }
 
@@ -465,7 +468,7 @@ private func accountServerName(_ baseUrl: String) -> String {
     return host + (url.port.map { ":\($0)" } ?? "")
 }
 
-private struct DashboardAccountPicker: View {
+struct DashboardAccountPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var session = LuckySession.shared
     @State private var showingAddAccount = false

@@ -158,19 +158,20 @@ private struct DockerComposeCard: View {
     var busy: Bool
     var perform: (DockerComposeVerb, DockerComposeTarget) -> Void
 
+    private static let primaryVerbs: [DockerComposeVerb] = [.start, .stop, .restart, .logs]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            heading
-            // `flexBasis 88` with sixteen items: a wrapping grid of equal columns, which is what
-            // `flexGrow 1` on every one of them comes to.
-            LuckyTileGrid(minimum: 88, spacing: 7) {
-                Group {
-                    ForEach(DockerComposeVerb.allCases.prefix(8)) { verb in button(verb) }
-                }
-                Group {
-                    ForEach(DockerComposeVerb.allCases.dropFirst(8)) { verb in button(verb) }
+        LuckyCard(padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+                heading
+                LuckyHairline()
+                commandLayout {
+                    ForEach(Self.primaryVerbs) { verb in button(verb) }
                 }
             }
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 
@@ -191,7 +192,51 @@ private struct DockerComposeCard: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            moreMenu
         }
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Section("配置与文件") {
+                menuButton(.editConfig)
+                menuButton(.readFile)
+                menuButton(.restoreConfig)
+                menuButton(.dockerfile)
+            }
+            Section("备份管理") {
+                menuButton(.backup)
+                menuButton(.backupList)
+                menuButton(.backupDownload)
+                menuButton(.backupUpload)
+                menuButton(.backupRestore)
+                menuButton(.backupCancel)
+            }
+            Section("危险操作") {
+                menuButton(.backupRemove, role: .destructive)
+                menuButton(.backupsClear, role: .destructive)
+            }
+        } label: {
+            LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 16, tone: .idle)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .opacity(busy ? 0.5 : 1)
+        .accessibilityLabel("\(target.name) 的更多操作")
+    }
+
+    private func menuButton(_ verb: DockerComposeVerb, role: ButtonRole? = nil) -> some View {
+        Button(role: role) {
+            perform(verb, target)
+        } label: {
+            Label(verb.label, systemImage: verb.symbol)
+        }
+    }
+
+    private var commandLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
     }
 
     private func button(_ verb: DockerComposeVerb) -> some View {

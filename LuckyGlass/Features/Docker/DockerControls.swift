@@ -295,7 +295,10 @@ struct DockerIconButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             HStack(spacing: 5) {
                 LuckyFunctionIcon(symbol: symbol, size: 26, glyph: 12, color: tint)
                 Text(label)
@@ -313,7 +316,7 @@ struct DockerIconButton: View {
                     .stroke(LuckyTheme.hairline, lineWidth: 1)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.75))
         .disabled(disabled)
         .opacity(disabled ? 0.5 : 1)
         .accessibilityLabel(label)
@@ -330,7 +333,10 @@ struct ContainerCommandButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             HStack(spacing: 5) {
                 LuckyFunctionIcon(symbol: symbol, size: 26, glyph: 12, color: tint)
                 Text(label)
@@ -347,7 +353,7 @@ struct ContainerCommandButton: View {
                     .stroke(LuckyTheme.hairline, lineWidth: 1)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.75))
         .disabled(disabled)
         .opacity(disabled ? 0.55 : 1)
         .accessibilityLabel(label)

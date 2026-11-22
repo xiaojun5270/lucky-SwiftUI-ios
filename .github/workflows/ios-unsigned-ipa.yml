@@ -45,6 +45,7 @@ jobs:
           python3 Tests/AccountUI/checks.py
           python3 Tests/DashboardLayout/checks.py
           python3 Tests/DockerLayout/checks.py
+          python3 Tests/UIRefinements/checks.py
 
       - name: Inspect project
         run: |

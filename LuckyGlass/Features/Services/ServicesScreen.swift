@@ -19,16 +19,16 @@ struct ServicesScreen: View {
 
     private static let managementEntries: [Entry] = [
         Entry(id: "web", title: "反向代理", detail: "域名、监听与 TLS 规则",
-              symbol: "globe.asia.australia", role: .web, keywords: "Web 代理 网络",
+              symbol: LuckySymbol.kind(.webservice), role: .web, keywords: "Web 代理 网络",
               route: .webservice),
         Entry(id: "docker", title: "Docker", detail: "容器、镜像与 Compose",
-              symbol: "shippingbox", role: .docker, keywords: "存储 网络",
+              symbol: LuckySymbol.kind(.docker), role: .docker, keywords: "存储 网络",
               route: .docker()),
         Entry(id: "ddns", title: "动态域名", detail: "自动更新域名解析",
-              symbol: "arrow.triangle.2.circlepath", role: .ddns, keywords: "DDNS 自动化",
+              symbol: LuckySymbol.kind(.ddns), role: .ddns, keywords: "DDNS 自动化",
               route: .service(.ddns)),
         Entry(id: "ssl", title: "SSL 证书", detail: "证书申请与自动续期",
-              symbol: "checkmark.shield", role: .security, keywords: "HTTPS 安全",
+              symbol: LuckySymbol.kind(.ssl), role: .security, keywords: "HTTPS 安全",
               route: .service(.ssl)),
     ]
 
@@ -97,7 +97,10 @@ struct ServicesScreen: View {
                     if entry.id != entries.first?.id {
                         LuckyHairline().padding(.leading, LuckyTheme.Space.cardInset + 56)
                     }
-                    Button { navigator.push(entry.route) } label: {
+                    Button {
+                        LuckyHaptic.selection()
+                        navigator.push(entry.route)
+                    } label: {
                         HStack(spacing: LuckyTheme.Space.l) {
                             LuckyIconTile(symbol: entry.symbol, size: 40, glyph: 19, role: entry.role)
                             VStack(alignment: .leading, spacing: 5) {
@@ -119,7 +122,7 @@ struct ServicesScreen: View {
                         .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LuckyPressStyle())
                 }
             }
         }

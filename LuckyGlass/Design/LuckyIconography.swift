@@ -160,7 +160,7 @@ extension TunnelKind {
         switch self {
         case .stun: "point.3.filled.connected.trianglepath.dotted"
         case .cloudflared: "cloud"
-        case .frp: "globe.asia.australia"
+        case .frp: "point.3.connected.trianglepath.dotted"
         }
     }
 
