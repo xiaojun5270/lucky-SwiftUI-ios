@@ -32,12 +32,6 @@ struct ServicesScreen: View {
               route: .service(.ssl)),
     ]
 
-    private static let toolsEntry = Entry(
-        id: "tools", title: "接口调试", detail: "浏览模块与 API 端点",
-        symbol: LuckySymbol.debugger, role: .tools, keywords: "模块 开发 工具",
-        route: .moduleIndex
-    )
-
     private var management: [Entry] { Self.managementEntries.filter(matches) }
 
     private var tunnels: [Entry] {
@@ -53,9 +47,9 @@ struct ServicesScreen: View {
             LuckyScreenHeader(title: "服务", subtitle: "网络、容器与隧道，集中管理") {
                 LuckyIconTile(symbol: "square.grid.2x2", size: 48, glyph: 21, role: .neutral)
             }
-            LuckySearchField(text: $search, placeholder: "搜索服务、隧道或工具")
+            LuckySearchField(text: $search, placeholder: "搜索服务或隧道")
 
-            if management.isEmpty, tunnels.isEmpty, !matches(Self.toolsEntry) {
+            if management.isEmpty, tunnels.isEmpty {
                 LuckyEmptyState(symbol: LuckySymbol.search, title: "没有匹配的服务",
                                 message: "尝试搜索 Docker、证书或隧道名称")
             } else {
@@ -75,9 +69,6 @@ struct ServicesScreen: View {
                     if !tunnels.isEmpty {
                         group("内网穿透", detail: "隧道与远程连接", entries: tunnels)
                     }
-                }
-                if matches(Self.toolsEntry) {
-                    group("更多工具", detail: "", entries: [Self.toolsEntry])
                 }
             }
         }

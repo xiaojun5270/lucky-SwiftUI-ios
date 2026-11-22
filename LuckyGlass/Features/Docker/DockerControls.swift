@@ -268,26 +268,26 @@ struct ContainerStatsGrid: View, Equatable {
         .accessibilityLabel("\(metric.label) \(metric.value)")
     }
 
-    /// `hasCpu ? cpu.toFixed(1)+"%" : "-"`
+    /// `hasCpu ? cpu.toFixed(1)+"%" : "--"`
     private var cpu: String {
-        guard let stats, stats.hasCpu else { return "-" }
+        guard let stats, stats.hasCpu else { return "--" }
         return JSCompat.toFixed(stats.cpu, 1) + "%"
     }
 
     /// The percentage when the daemon reported one, the absolute figure when it only reported
     /// bytes, and a dash when it reported neither.
     private var memory: String {
-        guard let stats else { return "-" }
+        guard let stats else { return "--" }
         if stats.hasMemoryPercent { return JSCompat.toFixed(stats.memoryPercent, 1) + "%" }
         if stats.hasMemory { return DockerRecord.compactBytes(stats.memory, true) }
-        return "-"
+        return "--"
     }
 
-    /// `compactDockerBytes(value ?? 0, hasX === true)` — a missing metric prints `N/A`, a present
+    /// `compactDockerBytes(value ?? 0, hasX === true)` — a missing metric prints `--`, a present
     /// zero prints `0 B`, which is the whole point of carrying the `has` flags alongside.
     private func bytes(_ value: KeyPath<DockerStatRow, Double>,
                        _ present: KeyPath<DockerStatRow, Bool>) -> String {
-        guard let stats else { return DockerRecord.compactBytes(0, false) }
+        guard let stats else { return "--" }
         return DockerRecord.compactBytes(stats[keyPath: value], stats[keyPath: present])
     }
 }

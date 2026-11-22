@@ -125,6 +125,11 @@ struct DockerScreen: View {
     init(initialView: String = "", initialSearch: String = "") {
         _view = State(initialValue: DockerView(rawValue: initialView) ?? .containers)
         _search = State(initialValue: initialSearch)
+        let cache = DockerStatsCache.shared
+        _stats = State(initialValue: cache.stats)
+        _liveStats = State(initialValue: cache.liveStats)
+        _containers = State(initialValue: cache.containers)
+        _statsSucceeded = State(initialValue: cache.stats != nil)
     }
 
     var body: some View {

@@ -54,7 +54,9 @@ extension DockerScreen {
         fetching = true
         defer { if view == .containers { fetching = false } }
         do {
-            containers = try await DockerService.containers().items
+            let items = try await DockerService.containers().items
+            containers = items
+            DockerStatsCache.shared.containers = items
             queryFailures[.containers] = ""
             loaded.insert(.containers)
         } catch {
@@ -152,7 +154,9 @@ extension DockerScreen {
         statsLoading = stats == nil && !statsFailed
         defer { statsLoading = false }
         do {
-            stats = try await DockerService.allContainerStats()
+            let fetched = try await DockerService.allContainerStats()
+            stats = fetched
+            DockerStatsCache.shared.stats = fetched
             statsSucceeded = true
             statsFailed = false
         } catch {
@@ -185,9 +189,11 @@ extension DockerScreen {
         // progress callback where `self` could not.
         let sink = $progressiveStats
         do {
-            liveStats = try await DockerService.refreshContainerStats(items: items) { partial in
+            let fetched = try await DockerService.refreshContainerStats(items: items) { partial in
                 Task { @MainActor in sink.wrappedValue = partial }
             }
+            liveStats = fetched
+            DockerStatsCache.shared.liveStats = fetched
             liveStatsFailure = ""
         } catch {
             guard !error.isCancellation else { return }

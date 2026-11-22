@@ -114,6 +114,26 @@ class UIRefinementsChecks(unittest.TestCase):
         containers = source("Features/Docker/DockerContainersView.swift")
         self.assertIn("ContainerStatsGrid(stats: stat).equatable()", containers)
 
+    def test_services_screen_hides_tools_entry(self):
+        services = source("Features/Services/ServicesScreen.swift")
+        self.assertNotIn("toolsEntry", services)
+        self.assertNotIn("更多工具", services)
+
+    def test_docker_stats_no_na_and_cached(self):
+        record = source("Features/Docker/DockerRecord.swift")
+        self.assertNotIn('"N/A"', record)
+        self.assertIn('guard available else { return "--" }', record)
+
+        controls = source("Features/Docker/DockerControls.swift")
+        self.assertNotIn('"N/A"', controls)
+        self.assertIn('guard let stats else { return "--" }', controls)
+
+        model = source("Features/Docker/DockerScreenModel.swift")
+        self.assertIn("class DockerStatsCache", model)
+
+        screen = source("Features/Docker/DockerScreen.swift")
+        self.assertIn("DockerStatsCache.shared", screen)
+
 
 if __name__ == "__main__":
     unittest.main()

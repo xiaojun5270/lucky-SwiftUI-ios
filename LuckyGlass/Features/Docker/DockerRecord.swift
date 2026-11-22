@@ -99,10 +99,10 @@ extension DockerRecord {
         return "\(JSCompat.toFixed(scaled, index == 0 ? 0 : 2)) \(units[index])"
     }
 
-    /// `compactDockerBytes(value, available)` — a metric the container never reported is `N/A`,
+    /// `compactDockerBytes(value, available)` — a metric the container never reported is `--`,
     /// a metric it reported as zero is `0 B`, and `bytes` would print `--` for both.
     static func compactBytes(_ value: Double, _ available: Bool) -> String {
-        guard available else { return "N/A" }
+        guard available else { return "--" }
         guard value > 0 else { return "0 B" }
         return bytes(.number(value))
     }

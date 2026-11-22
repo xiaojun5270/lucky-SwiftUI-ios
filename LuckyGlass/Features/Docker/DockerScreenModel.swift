@@ -375,3 +375,19 @@ struct DockerComposeCreateValue: Hashable, Sendable {
         ])
     }
 }
+
+/// In-memory cache across screen transitions so container metrics never flash blank or N/A on entry.
+@MainActor
+final class DockerStatsCache {
+    static let shared = DockerStatsCache()
+    var stats: JSONValue?
+    var liveStats: JSONValue?
+    var containers: [LuckyListItem] = []
+    private init() {}
+
+    func clear() {
+        stats = nil
+        liveStats = nil
+        containers = []
+    }
+}
