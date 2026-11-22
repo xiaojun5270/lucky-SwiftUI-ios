@@ -94,9 +94,9 @@ class UIRefinementsChecks(unittest.TestCase):
     def test_frameless_solid_icons(self):
         iconography = source("Design/LuckyIconography.swift")
         self.assertIn("static func solid(_ symbol: String) -> String", iconography)
-        self.assertIn('"cube.transparent": "cube.fill"', iconography)
-        self.assertIn('"globe.asia.australia": "globe.asia.australia.fill"', iconography)
-        self.assertIn('"lock.shield": "lock.shield.fill"', iconography)
+        self.assertIn('"cube.transparent": return "cube.fill"', iconography)
+        self.assertIn('"globe.asia.australia": return "globe.asia.australia.fill"', iconography)
+        self.assertIn('"lock.shield": return "lock.shield.fill"', iconography)
 
         # LuckyFunctionIcon must render directly without a RoundedRectangle tile/plate
         icon_func = iconography.split("struct LuckyFunctionIcon: View", 1)[1].split("extension TunnelKind", 1)[0]
