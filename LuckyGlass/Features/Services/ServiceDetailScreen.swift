@@ -220,21 +220,18 @@ struct ServiceDetailScreen: View {
                             prominent: true) {
                 openAdd()
             }
-            LuckyPillButton(title: "模块设置", symbol: "gearshape.2") { openSettingsEditor() }
-            LuckyGlassIconButton(symbol: "list.number",
-                                 label: kind == .ssl ? "证书排序" : "任务排序") {
-                openOrdering()
+            LuckyGlassMenuButton(label: kind == .ssl ? "证书更多操作" : "任务更多操作") {
+                Button("模块设置", systemImage: "gearshape") { openSettingsEditor() }
+                Button(kind == .ssl ? "证书排序" : "任务排序", systemImage: "arrow.up.arrow.down") {
+                    openOrdering()
+                }
             }
         } else {
             LuckyGlassIconButton(symbol: "chevron.left", label: "上一页日志") {
                 logPage = max(1, logPage - 1)
             }
             .disabled(logPage <= 1 || logsFetching)
-            Text(pagerLabel)
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .monospacedDigit()
-                .frame(minWidth: 82, maxWidth: .infinity)
+            LuckyPagerBadge(text: pagerLabel)
             LuckyGlassIconButton(symbol: "chevron.right", label: "下一页日志") { logPage += 1 }
                 .disabled(logsFetching || !(logs?.hasMore ?? false))
         }
@@ -291,6 +288,7 @@ struct ServiceDetailScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollIndicators(.hidden)
         .refreshable {
             let work = Task { await loadList() }

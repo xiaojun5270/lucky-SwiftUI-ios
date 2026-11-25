@@ -221,7 +221,7 @@ extension TunnelForm {
         }
         .buttonStyle(.plain)
         if extras {
-            StructuredForm(value: extraBinding).disabled(disabled)
+            StructuredForm(value: extraBinding, allowStructuralEdits: false).disabled(disabled)
         }
     }
 }

@@ -1,28 +1,26 @@
 import SwiftUI
 
-/// The floating layer: the only place in the app allowed to use `glassEffect`.
+/// Floating action bar pinned to the bottom safe area.
 ///
-/// Rules these views encode, so screens cannot get them wrong:
-/// * one `GlassEffectContainer` per cluster, never nested, never inside a scroll view's content;
-/// * a tint only when it means something (destructive, primary, selected);
-/// * `glassEffectID` inside `withAnimation` so shapes morph rather than cross-fade.
+/// Renders independent, cleanly separated floating controls (no Liquid Glass metaball fusion)
+/// sharing an exact 46pt height, subtle hairline stroke and soft ambient elevation shadow.
 struct LuckyGlassBar<Content: View>: View {
-    var spacing: CGFloat = LuckyTheme.Space.s
+    var spacing: CGFloat = 10
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        // The container's spacing is the distance at which two glass shapes start to merge, which
-        // is why it is larger than the layout spacing between the buttons.
-        GlassEffectContainer(spacing: LuckyTheme.Space.gutter) {
-            HStack(spacing: spacing, content: content)
-        }
-        .padding(.horizontal, LuckyTheme.Space.gutter)
-        .padding(.bottom, LuckyTheme.Space.s)
+        HStack(spacing: spacing, content: content)
+            .frame(maxWidth: LuckyTheme.Layout.contentWidth)
+            .padding(.horizontal, LuckyTheme.Space.gutter)
+            .padding(.top, 4)
+            .padding(.bottom, LuckyTheme.Space.s)
+            .frame(maxWidth: .infinity)
     }
 }
 
-/// The standard action button. `prominent` is the screen's single primary verb — 保存, 登录, 发送请求 —
-/// and everything else is plain glass.
+/// Primary or secondary floating capsule button used in action bars and retry cards.
+/// `prominent` is the screen's single primary verb — 保存, 添加证书, 创建容器 — rendered as a
+/// crisp filled accent capsule; secondary buttons use an elevated card surface with a hairline ring.
 struct LuckyPillButton: View {
     var title: String
     var symbol: String?
@@ -32,44 +30,90 @@ struct LuckyPillButton: View {
     var fills: Bool = true
     var action: () -> Void
 
-    /// `.glass` and `.glassProminent` are different types, so the branch happens here rather than
-    /// through a ternary on a single `buttonStyle` call.
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
-        if prominent {
-            button(iconPlate: false)
-                .buttonStyle(.glassProminent)
-                .tint(tone.tint)
-                .foregroundStyle(LuckyTheme.textOnAccent)
-        } else {
-            button(iconPlate: true)
-                .buttonStyle(.glass)
-                .foregroundStyle(LuckyTheme.textPrimary)
+        Button {
+            if prominent {
+                LuckyHaptic.medium()
+            } else {
+                LuckyHaptic.light()
+            }
+            action()
+        } label: {
+            HStack(spacing: 6) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(foreground)
+                } else if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                }
+                Text(title)
+                    .font(LuckyTheme.Text.button)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, fills ? 16 : 15)
+            .frame(maxWidth: fills ? .infinity : nil)
+            .frame(height: 46)
+            .background(Capsule(style: .continuous).fill(background))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(border, lineWidth: LuckyTheme.strokeWidth)
+            )
+            .shadow(
+                color: shadowColor,
+                radius: prominent ? 10 : 8,
+                x: 0,
+                y: prominent ? 4 : 3
+            )
+            .contentShape(Capsule(style: .continuous))
         }
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.82))
+        .disabled(loading)
+        .opacity(isEnabled ? 1 : 0.45)
     }
 
-    private func button(iconPlate: Bool) -> some View {
-        Button(action: action) {
-            HStack(spacing: LuckyTheme.Space.s) {
-                if loading {
-                    ProgressView().controlSize(.small)
-                } else if let symbol {
-                    if iconPlate {
-                        LuckyIconTile(symbol: symbol, size: 24, glyph: 11,
-                                      tone: tone == .brand ? nil : tone)
-                    } else {
-                        Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
-                    }
-                }
-                Text(title).font(LuckyTheme.Text.button).lineLimit(1)
-            }
-            .frame(maxWidth: fills ? .infinity : nil)
-            .padding(.vertical, 4)
+    private var foreground: Color {
+        if prominent { return LuckyTheme.textOnAccent }
+        return tone == .brand ? LuckyTheme.textPrimary : tone.tint
+    }
+
+    private var iconColor: Color {
+        if prominent { return LuckyTheme.textOnAccent }
+        return tone == .brand ? LuckyTheme.accent : tone.tint
+    }
+
+    private var background: Color {
+        if prominent { return tone.tint }
+        return tone == .brand ? LuckyTheme.surface : tone.fill
+    }
+
+    private var border: Color {
+        if prominent {
+            return Color.white.opacity(colorScheme == .dark ? 0.14 : 0.22)
         }
-        .disabled(loading)
+        if tone != .brand {
+            return tone.tint.opacity(0.30)
+        }
+        return LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.65 : 0.85)
+    }
+
+    private var shadowColor: Color {
+        if prominent {
+            return tone.tint.opacity(colorScheme == .dark ? 0.30 : 0.24)
+        }
+        return Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08)
     }
 }
 
-/// A compact filled icon button for anything whose meaning fits in one glyph: 刷新, 复制, 展开.
+/// A circular 46pt floating icon button matching `LuckyPillButton` in height, surface, border and
+/// elevation shadow — used for pagination and compact single-glyph bar actions.
 struct LuckyGlassIconButton: View {
     var symbol: String
     var label: String
@@ -77,18 +121,119 @@ struct LuckyGlassIconButton: View {
     var prominent: Bool = false
     var action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
         Button {
             LuckyHaptic.light()
             action()
         } label: {
-            LuckyIconTile(symbol: symbol, size: 40, glyph: 16,
-                          tone: prominent || tone != .brand ? tone : nil, filled: prominent)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            Image(systemName: LuckySymbol.solid(symbol))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(foreground)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(background))
+                .overlay(Circle().strokeBorder(border, lineWidth: LuckyTheme.strokeWidth))
+                .shadow(
+                    color: prominent
+                        ? tone.tint.opacity(colorScheme == .dark ? 0.30 : 0.24)
+                        : Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
+                    radius: 8,
+                    x: 0,
+                    y: 3
+                )
+                .contentShape(Circle())
         }
-        .buttonStyle(LuckyPressStyle(pressedScale: 0.92, pressedOpacity: 0.7))
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.92, pressedOpacity: 0.78))
+        .opacity(isEnabled ? 1 : 0.40)
         .accessibilityLabel(label)
+    }
+
+    private var foreground: Color {
+        if prominent { return LuckyTheme.textOnAccent }
+        return tone == .brand ? LuckyTheme.textPrimary : tone.tint
+    }
+
+    private var background: Color {
+        if prominent { return tone.tint }
+        return tone == .brand ? LuckyTheme.surface : tone.fill
+    }
+
+    private var border: Color {
+        if prominent {
+            return Color.white.opacity(colorScheme == .dark ? 0.14 : 0.22)
+        }
+        return LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.65 : 0.85)
+    }
+}
+
+/// Circular 46pt overflow menu trigger paired beside a primary `LuckyPillButton` in bottom bars.
+struct LuckyGlassMenuButton<MenuContent: View>: View {
+    var symbol: String = "ellipsis"
+    var label: String = "更多操作"
+    var tone: LuckyTone = .brand
+    @ViewBuilder var menu: () -> MenuContent
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Menu {
+            menu()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tone == .brand ? LuckyTheme.textPrimary : tone.tint)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(LuckyTheme.surface))
+                .overlay(
+                    Circle().strokeBorder(
+                        LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.65 : 0.85),
+                        lineWidth: LuckyTheme.strokeWidth
+                    )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
+                    radius: 8,
+                    x: 0,
+                    y: 3
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.42)
+        .accessibilityLabel(label)
+    }
+}
+
+/// Floating capsule readout centered between prev/next `LuckyGlassIconButton`s in log pagers.
+struct LuckyPagerBadge: View {
+    var text: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(text)
+            .font(LuckyTheme.Text.captionMedium)
+            .foregroundStyle(LuckyTheme.textPrimary)
+            .monospacedDigit()
+            .lineLimit(1)
+            .padding(.horizontal, 16)
+            .frame(minWidth: 92, maxWidth: .infinity)
+            .frame(height: 46)
+            .background(Capsule(style: .continuous).fill(LuckyTheme.surface))
+            .overlay(
+                Capsule(style: .continuous).strokeBorder(
+                    LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.65 : 0.85),
+                    lineWidth: LuckyTheme.strokeWidth
+                )
+            )
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
+                radius: 8,
+                x: 0,
+                y: 3
+            )
     }
 }
 
@@ -166,16 +311,26 @@ struct LuckyGlassSegmentedControl<Value: Hashable>: View {
     @Namespace private var indicator
 
     var body: some View {
-        GlassEffectContainer(spacing: LuckyTheme.Space.m) {
-            HStack(spacing: LuckyTheme.Space.xs) {
-                ForEach(segments) { segment in
-                    segmentButton(segment)
+        Group {
+            if glass {
+                GlassEffectContainer(spacing: LuckyTheme.Space.m) {
+                    track
                 }
+            } else {
+                track
             }
-            .padding(4)
-            .background(Capsule(style: .continuous).fill(LuckyTheme.surfaceRaised))
         }
         .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private var track: some View {
+        HStack(spacing: LuckyTheme.Space.xs) {
+            ForEach(segments) { segment in
+                segmentButton(segment)
+            }
+        }
+        .padding(4)
+        .background(Capsule(style: .continuous).fill(LuckyTheme.surfaceRaised))
     }
 
     @ViewBuilder

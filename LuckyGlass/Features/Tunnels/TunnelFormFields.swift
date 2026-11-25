@@ -250,7 +250,7 @@ extension TunnelSpec {
             ]
         } else {
             list += [
-                .spec("Params.Token", "隧道 Token", .secret, required: true),
+                .spec("Params.Token", "隧道令牌", .secret, required: true),
                 .spec("Params.EdgeIpVersion", "边缘 IP 版本", options: ["auto", "4", "6"]),
                 .spec("Params.Protocol", "连接协议", options: ["auto", "http2", "quic"]),
                 .spec("Params.HaConnections", "连接数", .number, min: 1, max: 8),
@@ -266,11 +266,11 @@ extension TunnelSpec {
                 .spec("Params.HeaderList", "请求头", .multiline),
                 .spec("Params.Destination", "目标地址"),
                 .spec("Params.ConnectTo", "连接地址"),
-                .spec("Params.UserAgent", "User Agent"),
+                .spec("Params.UserAgent", "用户代理（User-Agent）"),
             ]
         }
         return [
-            .spec("Params.CFApiToken", "Cloudflare API Token", .secret),
+            .spec("Params.CFApiToken", "Cloudflare API 令牌", .secret),
             .spec("Params.CFAccountId", "账户 ID"),
             .spec("Params.CFTunnelId", "隧道 ID"),
             .spec("Params.EdgeBindAddress", "边缘绑定地址"),
@@ -308,7 +308,7 @@ extension TunnelSpec {
                 .spec("Params.TLSEnable", "启用 TLS", .toggle),
             ]
         }
-        list.append(.spec("Params.Token", "认证 Token", .secret))
+        list.append(.spec("Params.Token", "认证令牌", .secret))
         return list
     }
 
@@ -329,8 +329,8 @@ extension TunnelSpec {
             .spec("Params.OIDCClientID", "OIDC 客户端 ID"),
             .spec("Params.OIDCClientSecret", "OIDC 客户端密钥", .secret),
             .spec("Params.OIDCTokenEndpointURL", "OIDC 令牌地址"),
-            .spec("Params.OIDCAudience", "OIDC Audience"),
-            .spec("Params.OIDCScope", "OIDC Scope"),
+            .spec("Params.OIDCAudience", "OIDC 受众标识"),
+            .spec("Params.OIDCScope", "OIDC 权限范围"),
         ]
         return list
     }
@@ -403,7 +403,7 @@ extension TunnelSpec {
         [
             .spec("useEncryption", "加密", .toggle),
             .spec("useCompression", "压缩", .toggle),
-            .spec("proxyProtocolVersion", "Proxy Protocol", options: ["", "v1", "v2"]),
+            .spec("proxyProtocolVersion", "代理协议版本", options: ["", "v1", "v2"]),
             .spec("bandwidthLimit", "带宽限制（例如 1MB）"),
             .spec("plugin", "插件", options: pluginOptions),
         ]

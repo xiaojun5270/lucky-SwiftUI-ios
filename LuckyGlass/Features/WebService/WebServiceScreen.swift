@@ -206,14 +206,17 @@ extension WebServiceScreen {
     @ViewBuilder
     private var logSourceButtons: some View {
         if logTarget.kind != .module {
-            LuckyPillButton(title: "模块日志", symbol: LuckySymbol.logs, fills: false) {
+            ServiceActionButton(title: "模块日志", symbol: LuckySymbol.logs, fill: .muted,
+                                height: 34, radius: LuckyTheme.Radius.row, expands: false) {
                 openLog(.module)
             }
         }
         if logTarget.kind.supportsRecent {
-            LuckyPillButton(title: logMode == .recent ? "最近日志" : "分页日志",
-                            symbol: logMode == .recent ? "clock" : "list.number",
-                            prominent: logMode == .recent, fills: false) {
+            ServiceActionButton(title: logMode == .recent ? "最近日志" : "分页日志",
+                                symbol: logMode == .recent ? "clock" : "list.number",
+                                tone: logMode == .recent ? .brand : .idle,
+                                fill: logMode == .recent ? .soft : .muted,
+                                height: 34, radius: LuckyTheme.Radius.row, expands: false) {
                 logMode = logMode == .recent ? .page : .recent
                 logPage = 1
             }
@@ -255,11 +258,7 @@ extension WebServiceScreen {
                 logPage = max(1, logPage - 1)
             }
             .disabled(logPage <= 1 || logsFetching)
-            Text(pagerLabel)
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .monospacedDigit()
-                .frame(minWidth: 82, maxWidth: .infinity)
+            LuckyPagerBadge(text: pagerLabel)
             LuckyGlassIconButton(symbol: "chevron.right", label: "下一页") { logPage += 1 }
                 .disabled(!logHasNext || logsFetching)
         case .settings, .tools:

@@ -234,7 +234,15 @@ enum ServiceRecord {
             }
             .filter { !$0.isEmpty }
             .joined(separator: ", ") ?? ""
-        return [pick(item, ["UpdateStatus"], ""), latest, pick(item, ["Message"], "")]
+        let rawStatus = pick(item, ["UpdateStatus"], "")
+        let status: String = switch rawStatus.jsTrimmed.lowercased() {
+        case "success", "succeeded", "ok": "同步成功"
+        case "failure", "failed", "error": "同步失败"
+        case "unchanged", "skipped": "无变更"
+        case "pending", "waiting": "等待同步"
+        default: rawStatus
+        }
+        return [status, latest, pick(item, ["Message"], "")]
             .filter { !$0.isEmpty && $0 != "--" }
             .joined(separator: " · ")
     }
@@ -339,10 +347,64 @@ enum ServiceRecord {
         }
     }
 
+    static func ddnsProviderLabel(_ raw: String) -> String {
+        switch raw.jsTrimmed.lowercased() {
+        case "alidns": return "阿里云 DNS"
+        case "aliesa": return "阿里云 ESA"
+        case "baiducloud": return "百度智能云"
+        case "cloudflare": return "Cloudflare"
+        case "edgeone": return "EdgeOne"
+        case "desec": return "deSEC"
+        case "dnsla": return "DNSLA"
+        case "dnspod": return "DNSPod 中国"
+        case "dnspodcom": return "DNSPod 国际"
+        case "duckdns": return "Duck DNS"
+        case "dynadot": return "Dynadot"
+        case "dynv6": return "Dynv6"
+        case "freemyip": return "FreeMyIP"
+        case "godaddy": return "GoDaddy"
+        case "huaweicloud": return "华为云"
+        case "jdcloud": return "京东云"
+        case "namecom": return "name.com"
+        case "namesilo": return "NameSilo"
+        case "spaceship": return "Spaceship"
+        case "porkbun": return "Porkbun"
+        case "tencentcloudv3", "tencentcloud": return "腾讯云"
+        case "vercel": return "Vercel"
+        case "volcengine": return "火山引擎"
+        case "west": return "西部数码"
+        case "callback": return "自定义回调"
+        default: return raw
+        }
+    }
+
+    static func localizedStatus(_ raw: String) -> String {
+        switch raw.jsTrimmed.lowercased() {
+        case "running": return "运行中"
+        case "stopped": return "已停止"
+        case "exited": return "已退出"
+        case "paused": return "已暂停"
+        case "created": return "已创建"
+        case "restarting": return "重启中"
+        case "removing": return "移除中"
+        case "dead": return "已失效"
+        case "pending": return "等待中"
+        case "completed", "done": return "已完成"
+        case "success", "succeeded", "ok": return "正常"
+        case "failed", "failure", "error": return "失败"
+        case "active", "enabled": return "已启用"
+        case "inactive", "disabled": return "已停用"
+        case "online": return "在线"
+        case "offline": return "离线"
+        default: return raw
+        }
+    }
+
     static func ddnsSummary(_ item: JSONValue) -> String {
         let dns = child(item, "DNS")
-        let provider = pick(dns, ["Name"],
-                            pick(item, ["DNSProvider", "Provider"], "未设置服务商"))
+        let rawProvider = pick(dns, ["Name"],
+                               pick(item, ["DNSProvider", "Provider"], "未设置服务商"))
+        let provider = ddnsProviderLabel(rawProvider)
         let records = recordItems(item)
         let ipv4 = pick(item, ["Ipv4Addr", "IPv4Addr", "V4Addr"], "")
         let ipv6 = pick(item, ["Ipv6Addr", "IPv6Addr", "V6Addr"], "")
@@ -360,7 +422,8 @@ enum ServiceRecord {
     /// state as a last resort.
     static func rowStatus(_ item: JSONValue) -> String {
         if isAcmeIssuing(item) { return "签发中" }
-        return pick(item, ["Status", "status", "State", "state", "LastResult"],
-                    isEnabled(item) ? "正常" : "已停用")
+        let raw = pick(item, ["Status", "status", "State", "state", "LastResult"],
+                       isEnabled(item) ? "正常" : "已停用")
+        return localizedStatus(raw)
     }
 }

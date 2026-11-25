@@ -79,8 +79,8 @@ extension TunnelRecord {
             return running.boolValue == true ? "运行中" : "未运行"
         }
         let reported = text(first(item, ["Status", "State"]))
-        guard reported.isEmpty else { return reported }
-        return isEnabled(item) ? "已启用" : "已停用"
+        guard !reported.isEmpty else { return isEnabled(item) ? "已启用" : "已停用" }
+        return ServiceRecord.localizedStatus(reported)
     }
 
     /// The chip's colour, decided on the same three-step fallback as the word itself.
@@ -103,8 +103,8 @@ extension TunnelRecord {
         case .stun: return stunSummary(item)
         case .frp: return frpSummary(item)
         case .cloudflared:
-            guard text(item["Type"]) == "access" else { return "Cloudflare Tunnel" }
-            return "Access · \(text(params(item)["Hostname"]))"
+            guard text(item["Type"]) == "access" else { return "Cloudflare 隧道" }
+            return "应用访问 · \(text(params(item)["Hostname"]))"
         }
     }
 
@@ -411,6 +411,7 @@ extension TunnelScreen {
             .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollIndicators(.hidden)
         .refreshable {
             let work = Task { await loadList() }
@@ -507,25 +508,26 @@ extension TunnelScreen {
     /// view: glass may not sit inside scrolling content, and this bar is where it belongs.
     @ViewBuilder
     private var actionBar: some View {
-        LuckyPillButton(title: "新增", symbol: LuckySymbol.add, prominent: true) {
+        LuckyPillButton(title: kind == .stun ? "新增规则" : "新增实例", symbol: LuckySymbol.add,
+                        prominent: true) {
             Task { await openEditor() }
         }
         .disabled(busy)
-        if kind == .stun {
-            LuckyGlassIconButton(symbol: LuckySymbol.settings, label: "全局设置") {
-                Task { await openEditor(settings: true) }
+        LuckyGlassMenuButton(label: "更多操作") {
+            if kind == .stun {
+                Button("全局设置", systemImage: LuckySymbol.settings) {
+                    Task { await openEditor(settings: true) }
+                }
+                Button("NAT 类型检测", systemImage: LuckySymbol.network) {
+                    natOpen = true
+                }
+            } else {
+                Button("模块日志", systemImage: LuckySymbol.logs) {
+                    openDetail(.logs, .object(JSONObject()))
+                }
             }
-            .disabled(busy)
-            LuckyGlassIconButton(symbol: LuckySymbol.network, label: "NAT 检测") {
-                natOpen = true
-            }
-            .disabled(busy)
-        } else {
-            LuckyGlassIconButton(symbol: LuckySymbol.logs, label: "模块日志") {
-                openDetail(.logs, .object(JSONObject()))
-            }
-            .disabled(busy)
         }
+        .disabled(busy)
     }
 }
 
@@ -565,7 +567,7 @@ extension TunnelScreen {
                     .lineLimit(1)
                 HStack(spacing: LuckyTheme.Space.xs) {
                     if !type.isEmpty {
-                        Text(type)
+                        Text(TunnelSpec.optionLabel(type))
                             .font(.system(size: 10.5))
                             .foregroundStyle(LuckyTheme.textSecondary)
                     }

@@ -59,7 +59,9 @@ private struct DockerNetworkCard: View {
     /// that reports neither renders a bare separator. Kept verbatim: the row is still identifiable
     /// by its name, and inventing a placeholder would be inventing data.
     private var subtitle: String {
-        "\(DockerRecord.pick(item, ["Driver"])) · \(DockerRecord.pick(item, ["Scope"]))"
+        let driver = DockerRecord.localizedDriver(DockerRecord.pick(item, ["Driver"]))
+        let scope = DockerRecord.localizedScope(DockerRecord.pick(item, ["Scope"]))
+        return [driver, scope].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     var body: some View {

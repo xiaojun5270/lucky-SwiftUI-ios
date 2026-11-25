@@ -118,22 +118,72 @@ extension DockerRecord {
 
     /// `containerStatus(item, running, paused)` — the badge text on a container row.
     ///
-    /// A stopped container shows the daemon's own words unless they read as an exit, and a running
-    /// one shows its uptime with the English unit localised.
+    /// A stopped container shows a clean localized label instead of raw English status strings,
+    /// and a running one shows its uptime with the English unit localised.
     static func containerStatus(_ item: JSONValue, running: Bool, paused: Bool) -> String {
         if paused { return "已暂停" }
         let raw = pick(item, ["Status", "status", "State", "state"], running ? "运行中" : "已停止")
         guard running else {
             let lowered = raw.lowercased()
-            let stopped = ["exit", "stop", "dead"].contains { lowered.contains($0) }
-            return stopped ? "已停止" : raw
+            if ["exit", "stop", "dead"].contains(where: { lowered.contains($0) }) { return "已停止" }
+            if lowered.contains("creat") { return "已创建" }
+            if lowered.contains("restart") { return "重启中" }
+            if lowered.contains("remov") { return "移除中" }
+            return raw
         }
         guard let duration = upDuration(raw) else { return "运行中" }
         var localized = duration
+        // Localize Docker's English uptime phrasing ("About an hour", "Less than a second", "a minute")
+        let phraseReplacements: [(String, String)] = [
+            ("less than a ", "不足 1 "),
+            ("about an ", "约 1 "),
+            ("about a ", "约 1 "),
+            ("an ", "1 "),
+            ("a ", "1 "),
+        ]
+        for (en, zh) in phraseReplacements {
+            if let r = localized.range(of: en, options: [.caseInsensitive, .anchored]) {
+                localized.replaceSubrange(r, with: zh)
+                break
+            }
+        }
         for (english, chinese) in durationWords {
             localized = replaceFirstUnit(english, with: chinese, in: localized)
         }
         return "运行: \(localized)"
+    }
+
+    static func localizedDriver(_ raw: String) -> String {
+        switch raw.jsTrimmed.lowercased() {
+        case "bridge": return "桥接"
+        case "host": return "宿主机"
+        case "none", "null": return "无网络"
+        case "overlay": return "覆盖网络"
+        case "macvlan": return "MACVLAN"
+        case "ipvlan": return "IPVLAN"
+        case "local": return "本地"
+        default: return raw
+        }
+    }
+
+    static func localizedScope(_ raw: String) -> String {
+        switch raw.jsTrimmed.lowercased() {
+        case "local": return "本地"
+        case "global": return "全局"
+        case "swarm": return "集群"
+        default: return raw
+        }
+    }
+
+    static func localizedTaskStatus(_ raw: String) -> String {
+        switch raw.jsTrimmed.lowercased() {
+        case "pending", "queued", "waiting": return "等待中"
+        case "running", "in_progress", "processing": return "执行中"
+        case "completed", "done", "finished", "success", "succeeded": return "已完成"
+        case "failed", "failure", "error": return "失败"
+        case "cancelled", "canceled": return "已取消"
+        default: return raw
+        }
     }
 
     /// `text.replace(/{unit}s?/i, chinese)` — first match only, and the optional plural `s` is

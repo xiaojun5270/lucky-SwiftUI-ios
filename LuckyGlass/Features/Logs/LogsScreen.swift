@@ -194,7 +194,7 @@ struct LogsScreen: View {
     private var outputHeader: some View {
         HStack(spacing: LuckyTheme.Space.s) {
             LuckyStatusDot(tone: statusTone, pulsing: pollActive && failure.isEmpty, size: 7)
-            Text(paused ? "已暂停" : "实时 · 3s")
+            Text(paused ? "已暂停" : "实时 · 3 秒")
                 .font(LuckyTheme.Text.captionMedium)
                 .foregroundStyle(LuckyTheme.textPrimary)
                 .lineLimit(1)

@@ -41,7 +41,7 @@ struct ModuleIndexScreen: View {
                 .buttonStyle(.plain)
             }
         }
-        .searchable(text: $search, prompt: "搜索模块名称或 Key")
+        .searchable(text: $search, prompt: "搜索模块名称或标识")
         .searchToolbarBehavior(.minimize)
     }
 

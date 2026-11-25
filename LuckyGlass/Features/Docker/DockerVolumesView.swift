@@ -128,8 +128,9 @@ private struct DockerVolumeCard: View {
 
     /// `${pick(item,["Driver"],"local")} · ${pick(item,["Mountpoint"])}`
     private var subtitle: String {
-        let driver = DockerRecord.pick(item, ["Driver"], "local")
-        return "\(driver) · \(DockerRecord.pick(item, ["Mountpoint"]))"
+        let driver = DockerRecord.localizedDriver(DockerRecord.pick(item, ["Driver"], "local"))
+        let mount = DockerRecord.pick(item, ["Mountpoint"])
+        return [driver, mount].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     var body: some View {

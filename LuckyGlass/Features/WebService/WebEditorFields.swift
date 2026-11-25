@@ -92,7 +92,7 @@ extension WebSubRuleFields {
                  hint: "每行填写一个域名或访问地址", multiline: true, write: write)
         WebField(label: reverseProxy ? "后端地址" : "目标地址", field: "Locations", data: data,
                  hint: "每行填写一个地址", multiline: true, write: write)
-        WebSelect(label: "CorazaWAF", field: "CorazaWAFInstance", options: context.subWafOptions,
+        WebSelect(label: "WAF 防护实例", field: "CorazaWAFInstance", options: context.subWafOptions,
                   data: data, scope: scope, openSelect: $openSelect, write: write)
     }
 

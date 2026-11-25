@@ -144,7 +144,7 @@ private struct EndpointPickedFile: Equatable {
 
     /// `${name}${size ? ` · ${size} bytes` : ''}`
     var caption: String {
-        data.isEmpty ? name : "\(name) · \(data.count) bytes"
+        data.isEmpty ? name : "\(name) · \(Format.bytes(Double(data.count)))"
     }
 }
 
@@ -463,12 +463,12 @@ struct EndpointScreen: View {
             if dangerous { dangerBanner }
             ForEach(endpoint.pathVariables, id: \.self) { name in
                 LuckyTextField(label: "路径参数 \(name)", text: pathBinding(name),
-                               placeholder: "输入 ID、Key 或资源名称", mono: true)
+                               placeholder: "输入编号、标识或资源名称", mono: true)
             }
             // Only when there is no named variable: an endpoint with both would be ambiguous about
             // which part of the path the suffix fills.
             if endpoint.pathVariables.isEmpty, endpoint.requiresSuffix {
-                LuckyTextField(label: "资源 Key / 路径后缀", text: $suffix,
+                LuckyTextField(label: "资源标识 / 路径后缀", text: $suffix,
                                placeholder: "输入资源名称或路径后缀", mono: true)
             }
         }
@@ -556,7 +556,7 @@ struct EndpointScreen: View {
                     .accessibilityLabel("移除文件")
                 }
             }
-            EndpointInput(text: $fileField, placeholder: "Multipart 字段名")
+            EndpointInput(text: $fileField, placeholder: "表单文件字段名")
             fileRow
         }
     }

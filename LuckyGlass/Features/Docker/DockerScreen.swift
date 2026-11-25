@@ -406,11 +406,7 @@ extension DockerScreen {
             logPage = max(1, logPage - 1)
         }
         .disabled(logPage <= 1 || fetching)
-        Text("第 \(logPage) 页")
-            .font(LuckyTheme.Text.caption)
-            .foregroundStyle(LuckyTheme.textSecondary)
-            .monospacedDigit()
-            .frame(minWidth: 82, maxWidth: .infinity)
+        LuckyPagerBadge(text: "第 \(logPage) 页")
         LuckyGlassIconButton(symbol: "chevron.right", label: "下一页 Docker 日志") {
             logPage += 1
         }

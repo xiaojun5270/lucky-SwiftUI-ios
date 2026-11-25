@@ -48,10 +48,22 @@ private struct WebCgiCard: View {
     /// `` `${CGIType} · ${Network} · ${Address}` `` — each with `pick`'s empty-string fallback, so
     /// a field the module left out renders as nothing between the middots instead of as `--`.
     private var summary: String {
-        let type = WebRecord.pick(item, ["CGIType"])
-        let network = WebRecord.pick(item, ["Network"])
+        let rawType = WebRecord.pick(item, ["CGIType"])
+        let type: String = switch rawType.lowercased() {
+        case "php": "PHP"
+        case "fastcgi": "FastCGI"
+        default: rawType.uppercased()
+        }
+        let rawNetwork = WebRecord.pick(item, ["Network"])
+        let network: String = switch rawNetwork.lowercased() {
+        case "tcp": "TCP"
+        case "tcp4": "TCP/IPv4"
+        case "tcp6": "TCP/IPv6"
+        case "unix": "Unix 套接字"
+        default: rawNetwork.uppercased()
+        }
         let address = WebRecord.pick(item, ["Address"])
-        return "\(type) · \(network) · \(address)"
+        return [type, network, address].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     var body: some View {

@@ -22,6 +22,7 @@ struct WebPaneScroll<Content: View>: View {
                 .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .refreshable {

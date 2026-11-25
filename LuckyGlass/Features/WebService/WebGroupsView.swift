@@ -56,8 +56,8 @@ private struct WebGroupCard: View {
     /// rather than printing a zero it never sent. A present null goes through `${null}` and prints
     /// the literal `null`, exactly as it does in `WebRecord.lines`.
     private var summary: String {
-        guard let count = item["subRuleCount"] else { return "\(key) · 接口未返回子规则数量" }
-        let text = count.isNull ? "null" : count.asDisplayString
+        guard let count = item["subRuleCount"] else { return "\(key) · 暂无子规则统计" }
+        let text = count.isNull ? "--" : count.asDisplayString
         return "\(key) · \(text) 个子规则"
     }
 

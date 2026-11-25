@@ -317,6 +317,58 @@ class UIRefinementsChecks(unittest.TestCase):
         service_form = source("Features/Services/ServiceFormEditor.swift")
         self.assertIn("allowStructuralEdits: false", service_form)
 
+        # 8. Cross-page English localization sweep (Docker, Web, DDNS, Tunnels, StructuredDataView)
+        import re
+        self.assertIn("private static func localizedScalar(", form)
+        self.assertIn('"git_url": "Git 仓库地址"', form)
+        self.assertIn('"ServerAddr": "服务器地址"', form)
+        table_match = re.search(r"static let table: \[String: String\] = \[(.*?)\n    \]", form, re.S)
+        assert table_match is not None
+        table_keys = re.findall(r'"([^"]+)"\s*:', table_match.group(1))
+        self.assertEqual(len(table_keys), len(set(table_keys)), "Duplicate keys in LuckyFieldName.table")
+        self.assertIn("static func ddnsProviderLabel(", records)
+        self.assertIn("static func localizedStatus(", records)
+        ddns_editors = source("Features/Services/DdnsEditors.swift")
+        self.assertIn('LuckyToggleRow(label: "启用 \\(label) 地址获取"', ddns_editors)
+        self.assertNotIn('Access Key ID', ddns_editors)
+        tunnel_spec = source("Features/Tunnels/TunnelFormSpec.swift")
+        self.assertIn('"http_proxy": "HTTP 代理"', tunnel_spec)
+        self.assertIn('"unix_domain_socket": "Unix 套接字"', tunnel_spec)
+        tunnel_fields = source("Features/Tunnels/TunnelFormFields.swift")
+        self.assertIn('"代理协议版本"', tunnel_fields)
+        self.assertIn('"用户代理（User-Agent）"', tunnel_fields)
+        docker_rec = source("Features/Docker/DockerRecord.swift")
+        self.assertIn("static func localizedDriver(", docker_rec)
+        self.assertIn("static func localizedTaskStatus(", docker_rec)
+        self.assertIn('"less than a "', docker_rec)
+        docker_net = source("Features/Docker/DockerNetworksView.swift")
+        self.assertIn("DockerRecord.localizedDriver(", docker_net)
+        docker_tasks = source("Features/Docker/DockerTasksView.swift")
+        self.assertIn("DockerRecord.localizedTaskStatus(", docker_tasks)
+        web_cgi = source("Features/WebService/WebCgiView.swift")
+        self.assertIn('"Unix 套接字"', web_cgi)
+        web_groups = source("Features/WebService/WebGroupsView.swift")
+        self.assertNotIn('? "null" :', web_groups)
+
+        # 9. Floating bottom action bar visual overhaul (zero metaball fusion, unified 46pt pills/circles/menus)
+        glass = source("Design/LuckyGlassControls.swift")
+        bar_def = glass.split("struct LuckyGlassBar<", 1)[1].split("struct LuckyPillButton:", 1)[0]
+        self.assertNotIn("GlassEffectContainer", bar_def)
+        pill_def = glass.split("struct LuckyPillButton:", 1)[1].split("struct LuckyGlassIconButton:", 1)[0]
+        self.assertNotIn(".buttonStyle(.glass", pill_def)
+        self.assertIn(".frame(height: 46)", pill_def)
+        icon_def = glass.split("struct LuckyGlassIconButton:", 1)[1].split("struct LuckyGlassMenuButton", 1)[0]
+        self.assertIn("Circle().fill(background)", icon_def)
+        self.assertIn("struct LuckyGlassMenuButton<MenuContent: View>: View", glass)
+        self.assertIn("struct LuckyPagerBadge: View", glass)
+        self.assertIn("LuckyGlassMenuButton(", detail)
+        self.assertIn("LuckyPagerBadge(text: pagerLabel)", detail)
+        self.assertIn("LuckyGlassMenuButton(", tunnel)
+        web_screen = source("Features/WebService/WebServiceScreen.swift")
+        self.assertIn("LuckyPagerBadge(text: pagerLabel)", web_screen)
+        docker_screen = source("Features/Docker/DockerScreen.swift")
+        self.assertIn('LuckyPagerBadge(text: "第 \\(logPage) 页")', docker_screen)
+
 
 if __name__ == "__main__":
     unittest.main()

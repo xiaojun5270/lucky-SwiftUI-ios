@@ -248,7 +248,7 @@ extension ServiceAdvancedSheet {
                         .lineLimit(2)
                     Text(latest.isEmpty ? (active ? "等待同步" : "同步已停用") : latest)
                         .font(LuckyTheme.Text.codeSmall)
-                        .foregroundStyle(latest.contains("FAILURE")
+                        .foregroundStyle((latest.contains("FAILURE") || latest.contains("失败"))
                                          ? LuckyTheme.danger
                                          : (active ? LuckyTheme.success : LuckyTheme.textSecondary))
                         .lineLimit(2)

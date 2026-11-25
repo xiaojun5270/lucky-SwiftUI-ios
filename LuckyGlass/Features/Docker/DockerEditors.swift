@@ -37,14 +37,26 @@ struct DockerFormEditor: View {
         ServiceSheet(title: request.title, close: close) {
             // 确认执行 rather than 保存: over half of these forms run a command and write nothing,
             // and the original labels every one of them the same way.
-            LuckyPillButton(title: busy ? "执行中" : "确认执行", symbol: "tray.and.arrow.down",
+            LuckyPillButton(title: busy ? "执行中" : "确认执行", symbol: "checkmark",
                             prominent: true, loading: busy) {
                 save(.object(value))
             }
         } content: {
             LuckyCard {
-                StructuredForm(value: $value)
+                StructuredForm(value: $value, allowStructuralEdits: allowsDynamicFields)
             }
+        }
+    }
+
+    /// Only open-ended container/image/network/volume schema forms allow adding/removing arbitrary keys;
+    /// fixed-field action forms hide per-field trash icons for a cleaner UI.
+    private var allowsDynamicFields: Bool {
+        switch request.kind {
+        case .containerCreate, .containerEdit, .imageBuild, .imageBuildGit, .imageBuildZip,
+             .networkCreate, .volumeCreate, .configSave:
+            return true
+        default:
+            return false
         }
     }
 }

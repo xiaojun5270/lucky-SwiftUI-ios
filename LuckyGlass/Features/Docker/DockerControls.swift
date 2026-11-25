@@ -450,6 +450,7 @@ struct DockerPaneScroll<Content: View>: View {
             .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .refreshable {
@@ -507,6 +508,7 @@ struct DockerListPane<Header: View, Rows: View>: View {
             .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollIndicators(.hidden)
         // `keyboardShouldPersistTaps="handled"` is RN's default-fighting flag; the iOS equivalent
         // is letting a drag dismiss the search keyboard rather than swallowing the first tap.

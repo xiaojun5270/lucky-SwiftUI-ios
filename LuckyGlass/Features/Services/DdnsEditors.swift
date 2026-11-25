@@ -613,9 +613,9 @@ struct DdnsTaskEditor: View {
                 }
             } else {
                 if !DdnsForm.secretOnlyProviders.contains(provider) {
-                    field("账号 / Access Key ID", "DNS.ID", required: true)
+                    field("账号 / 密钥 ID", "DNS.ID", required: true)
                 }
-                field("密钥 / Token", "DNS.Secret", secure: true, required: true)
+                field("密钥 / 令牌", "DNS.Secret", secure: true, required: true)
             }
             field("强制同步周期（60～86400 秒）", "DNS.ForceInterval", numeric: true)
             toggle("同步后校验 DNS 解析", "DNS.ResolverDoaminCheck")
@@ -846,7 +846,7 @@ private struct DdnsIpSource: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckyToggleRow(label: "启用 {\(label.lowercased())Addr}", isOn: enabled)
+            LuckyToggleRow(label: "启用 \(label) 地址获取", isOn: enabled)
                 .disabled(busy)
             if enabled.wrappedValue {
                 DdnsChoice(label: "\(label) 获取方式", options: options, current: mode,
@@ -943,7 +943,7 @@ private struct DdnsRecordEditor: View {
 
     var body: some View {
         ServiceSheet(title: title, close: close) {
-            LuckyPillButton(title: "返回", symbol: "chevron.left") { close() }
+            LuckyPillButton(title: "返回", symbol: "chevron.left", fills: false) { close() }
                 .disabled(busy)
             LuckyPillButton(title: "保存记录", symbol: "checkmark", prominent: true) {
                 submit()

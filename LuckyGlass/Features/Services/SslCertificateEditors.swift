@@ -278,7 +278,7 @@ struct SslCertificateAddSheet: View {
         ServiceSheet(title: "添加证书", close: close) {
             // The original weights 取消 at `flex: 1` against 添加 at `flex: 1.35`; two glass pills in
             // a bar split the width evenly instead.
-            LuckyPillButton(title: "取消", symbol: "xmark") { close() }
+            LuckyPillButton(title: "取消", symbol: "xmark", fills: false) { close() }
                 .disabled(busy)
             LuckyPillButton(title: busy ? "添加中..." : "添加", symbol: "plus",
                             prominent: true, loading: busy) {
@@ -728,7 +728,7 @@ extension SslAcmeEditor {
 extension SslAcmeEditor {
     var body: some View {
         ServiceSheet(title: "编辑证书", close: close) {
-            LuckyPillButton(title: "取消", symbol: "xmark") { close() }
+            LuckyPillButton(title: "取消", symbol: "xmark", fills: false) { close() }
                 .disabled(busy)
             LuckyPillButton(title: busy ? "保存中..." : "保存", symbol: "checkmark",
                             prominent: true, loading: busy) {

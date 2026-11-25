@@ -43,7 +43,7 @@ private struct DockerTaskCard: View {
     /// `pick(item, ["Status","state","Progress"])` — the lowercase `state` in the middle of an
     /// otherwise capitalised list is the original's, and the task endpoints really do disagree.
     private var status: String {
-        DockerRecord.pick(item, ["Status", "state", "Progress"])
+        DockerRecord.localizedTaskStatus(DockerRecord.pick(item, ["Status", "state", "Progress"]))
     }
 
     var body: some View {

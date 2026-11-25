@@ -214,9 +214,13 @@ private struct DockerImageCard: View {
     var batch: DockerImageBatch
     var actions: DockerImageActions
 
-    /// `pick(item, ["RepoTags","Tags","Name"], "<none>")` — a dangling image really is called this.
+    /// `pick(item, ["RepoTags","Tags","Name"], "<none>")` — localise dangling `<none>` images cleanly.
     private var name: String {
-        DockerRecord.pick(entry.item, ["RepoTags", "Tags", "Name"], "<none>")
+        let raw = DockerRecord.pick(entry.item, ["RepoTags", "Tags", "Name"], "")
+        if raw.isEmpty || raw == "<none>" || raw == "<none>:<none>" {
+            return "未标记镜像"
+        }
+        return raw
     }
 
     private var selected: Bool { batch.selected.contains(entry.id) }

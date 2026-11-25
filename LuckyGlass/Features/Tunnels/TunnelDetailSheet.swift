@@ -55,7 +55,8 @@ extension TunnelDetailSheet {
     /// primary verb, and it exists only for a child list.
     @ViewBuilder
     private var actionBar: some View {
-        LuckyPillButton(title: "刷新", symbol: LuckySymbol.refresh) {
+        let hasAdd = detail.mode.collection != nil
+        LuckyPillButton(title: "刷新", symbol: LuckySymbol.refresh, fills: !hasAdd) {
             Task { await refresh() }
         }
         .disabled(fetching)

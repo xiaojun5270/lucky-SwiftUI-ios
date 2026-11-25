@@ -517,7 +517,7 @@ extension WebEditorSheet {
             WebField(label: "最大请求头 (KB)", field: "MaxHeaderKBytes", data: value,
                      numeric: true, write: update)
         }
-        WebSelect(label: "CorazaWAF", field: "CorazaWAFInstance", options: wafOptions, data: value,
+        WebSelect(label: "WAF 防护实例", field: "CorazaWAFInstance", options: wafOptions, data: value,
                   openSelect: $openSelect, write: update)
         wafButton
     }
@@ -572,7 +572,7 @@ extension WebEditorSheet {
 
     @ViewBuilder
     private var defaultSwitches: some View {
-        WebSelect(label: "CorazaWAF", field: "CorazaWAFInstance", options: subWafOptions,
+        WebSelect(label: "WAF 防护实例", field: "CorazaWAFInstance", options: subWafOptions,
                   data: defaultProxy, scope: "default", openSelect: $openSelect,
                   write: updateDefaultProxy)
         WebToggle(label: "万事大吉", field: "EasyLucky", data: defaultProxy,
@@ -625,7 +625,7 @@ extension WebEditorSheet {
             // `editor.key ? … : null` — an existing group shows its key, read-only; a new one has
             // none to show.
             if !(request.key ?? "").isEmpty {
-                WebField(label: "分组 Key", field: "Key", data: value, readOnly: true,
+                WebField(label: "分组标识", field: "Key", data: value, readOnly: true,
                          write: update)
             }
         }
@@ -641,11 +641,14 @@ extension WebEditorSheet {
 
 extension WebEditorSheet {
     /// `options: ["php", "fastcgi"]` — `Choices` accepts bare strings and labels each with itself.
-    private static let cgiTypes = [WebOption("php", "php"), WebOption("fastcgi", "fastcgi")]
+    private static let cgiTypes = [
+        WebOption("PHP", "php"),
+        WebOption("FastCGI", "fastcgi"),
+    ]
 
     private static let cgiNetworks = [
-        WebOption("tcp", "tcp"), WebOption("tcp4", "tcp4"),
-        WebOption("tcp6", "tcp6"), WebOption("unix", "unix"),
+        WebOption("TCP", "tcp"), WebOption("TCP / IPv4", "tcp4"),
+        WebOption("TCP / IPv6", "tcp6"), WebOption("Unix 套接字", "unix"),
     ]
 
     @ViewBuilder
