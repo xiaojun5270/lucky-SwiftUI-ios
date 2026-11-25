@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// The eight Docker workspaces, in tab order.
 enum DockerView: String, Hashable, CaseIterable, Identifiable, Sendable {
@@ -376,18 +377,540 @@ struct DockerComposeCreateValue: Hashable, Sendable {
     }
 }
 
-/// In-memory cache across screen transitions so container metrics never flash blank or N/A on entry.
+private struct DockerPersistedSnapshot: Codable, Sendable {
+    var containersJSON: String
+    var iconsJSON: String
+    var imagesJSON: String
+    var composeJSON: String
+    var networksJSON: String
+    var volumesJSON: String
+    var statsByKey: [String: DockerStatRow]
+    var savedAt: TimeInterval
+}
+
+private struct DockerHydratedPayload: Sendable {
+    var containers: [LuckyListItem]
+    var icons: [JSONValue]
+    var containerRows: [DockerContainerRow]
+    var imageSnapshot: DockerImageSnapshot
+    var projects: [LuckyListItem]
+    var networks: [LuckyListItem]
+    var volumes: [LuckyListItem]
+    var statsByKey: [String: DockerStatRow]
+    var savedAt: Date
+}
+
+private final class DockerThrottleBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastFlush: Date = .distantPast
+
+    func shouldFlush(minInterval: TimeInterval) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = Date()
+        guard now.timeIntervalSince(lastFlush) >= minInterval else { return false }
+        lastFlush = now
+        return true
+    }
+}
+
+/// Account-scoped persistent cache and background warmup engine for Docker containers & telemetry.
+/// Hydrates cached data from disk off the main actor on launch and refreshes stats quietly in the
+/// background so entering Docker never flashes `--` or stalls scrolling.
 @MainActor
+@Observable
 final class DockerStatsCache {
     static let shared = DockerStatsCache()
+
     var stats: JSONValue?
     var liveStats: JSONValue?
     var containers: [LuckyListItem] = []
+    var icons: [JSONValue] = []
+    var imageSnapshot = DockerImageSnapshot()
+    var projects: [LuckyListItem] = []
+    var networks: [LuckyListItem] = []
+    var volumes: [LuckyListItem] = []
+    private(set) var statsByKey: [String: DockerStatRow] = [:]
+    private(set) var loadedQueries: Set<DockerQuery> = []
+    private(set) var statsSucceeded = false
+    private(set) var statsFailed = false
+    private(set) var liveStatsFailure = ""
+    private(set) var dataRevision: UInt64 = 0
+    private(set) var statsRevision: UInt64 = 0
+
+    private var activeAccountKey = ""
+    private var activeGeneration: UInt64 = 0
+    private var hydratedAccountKey = ""
+    private var lastUpdated: [DockerQuery: Date] = [:]
+    private var statsRefreshInFlight = false
+    private var containersRefreshInFlight = false
+    private var diskSaveTask: Task<Void, Never>?
+
     private init() {}
 
+    // MARK: - Account Scope & Freshness
+
+    static func accountKey(baseUrl: String, account: String) -> String {
+        let normalized = "\(baseUrl.jsTrimmed.withoutTrailingSlashes)|\(account)"
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in normalized.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return String(hash, radix: 16)
+    }
+
+    private static func cacheFileURL(for key: String) -> URL? {
+        guard !key.isEmpty else { return nil }
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return root
+            .appendingPathComponent("LuckyDockerCache", isDirectory: true)
+            .appendingPathComponent("\(key).json")
+    }
+
+    func activate(credentials: LuckyCredentials) {
+        let key = Self.accountKey(baseUrl: credentials.baseUrl, account: credentials.account)
+        guard key != activeAccountKey || credentials.generation != activeGeneration else { return }
+        diskSaveTask?.cancel()
+        diskSaveTask = nil
+        activeAccountKey = key
+        activeGeneration = credentials.generation
+        hydratedAccountKey = ""
+        resetMemory()
+    }
+
+    func isFresh(_ query: DockerQuery, maxAge: TimeInterval = 25) -> Bool {
+        guard let stamp = lastUpdated[query] else { return false }
+        return Date().timeIntervalSince(stamp) < maxAge
+    }
+
+    func hasWarmData(for view: DockerView) -> Bool {
+        switch view {
+        case .containers: return !containers.isEmpty || loadedQueries.contains(.containers)
+        case .images: return !imageSnapshot.items.isEmpty || loadedQueries.contains(.images)
+        case .compose: return !projects.isEmpty || loadedQueries.contains(.compose)
+        case .networks: return !networks.isEmpty || loadedQueries.contains(.networks)
+        case .volumes: return !volumes.isEmpty || loadedQueries.contains(.volumes)
+        case .tasks, .settings, .logs: return false
+        }
+    }
+
     func clear() {
+        diskSaveTask?.cancel()
+        diskSaveTask = nil
+        hydratedAccountKey = ""
+        resetMemory()
+    }
+
+    private func resetMemory() {
         stats = nil
         liveStats = nil
         containers = []
+        icons = []
+        imageSnapshot = DockerImageSnapshot()
+        projects = []
+        networks = []
+        volumes = []
+        statsByKey = [:]
+        loadedQueries = []
+        lastUpdated = [:]
+        statsSucceeded = false
+        statsFailed = false
+        liveStatsFailure = ""
+        statsRefreshInFlight = false
+        containersRefreshInFlight = false
+        DockerIconIndex.shared.seed(items: [], icons: [], rows: [])
+        dataRevision &+= 1
+        statsRevision &+= 1
+    }
+
+    // MARK: - Disk Persistence
+
+    func hydrateFromDiskIfNeeded(credentials: LuckyCredentials) async {
+        guard !credentials.baseUrl.isEmpty else { return }
+        activate(credentials: credentials)
+        let key = activeAccountKey
+        let generation = activeGeneration
+        guard hydratedAccountKey != key, let url = Self.cacheFileURL(for: key) else { return }
+        hydratedAccountKey = key
+
+        let payload: DockerHydratedPayload? = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: url),
+                  let snapshot = try? JSONDecoder().decode(DockerPersistedSnapshot.self, from: data) else {
+                return nil
+            }
+            let containers = JSONParser.tryParse(snapshot.containersJSON)?.arrayValue ?? []
+            let icons = JSONParser.tryParse(snapshot.iconsJSON)?.arrayValue ?? []
+            let images = JSONParser.tryParse(snapshot.imagesJSON)?.arrayValue ?? []
+            let projects = JSONParser.tryParse(snapshot.composeJSON)?.arrayValue ?? []
+            let networks = JSONParser.tryParse(snapshot.networksJSON)?.arrayValue ?? []
+            let volumes = JSONParser.tryParse(snapshot.volumesJSON)?.arrayValue ?? []
+            return DockerHydratedPayload(
+                containers: containers,
+                icons: icons,
+                containerRows: DockerIconIndex.buildRows(items: containers, icons: icons),
+                imageSnapshot: DockerImageSnapshot(items: images),
+                projects: projects,
+                networks: networks,
+                volumes: volumes,
+                statsByKey: snapshot.statsByKey,
+                savedAt: Date(timeIntervalSince1970: snapshot.savedAt)
+            )
+        }.value
+
+        guard generation == activeGeneration, key == activeAccountKey, let payload else { return }
+        var dataChanged = false
+        if containers.isEmpty, !payload.containers.isEmpty {
+            containers = payload.containers
+            loadedQueries.insert(.containers)
+            dataChanged = true
+        }
+        if icons.isEmpty, !payload.icons.isEmpty {
+            icons = payload.icons
+            loadedQueries.insert(.iconLibrary)
+            dataChanged = true
+        }
+        if !payload.containerRows.isEmpty, containers == payload.containers, icons == payload.icons {
+            DockerIconIndex.shared.seed(items: payload.containers, icons: payload.icons, rows: payload.containerRows)
+            let paths = payload.containerRows.map(\.icon)
+            Task { await DockerIconLoader.shared.prewarm(paths) }
+        }
+        if imageSnapshot.items.isEmpty, !payload.imageSnapshot.items.isEmpty {
+            imageSnapshot = payload.imageSnapshot
+            loadedQueries.insert(.images)
+            dataChanged = true
+        }
+        if projects.isEmpty, !payload.projects.isEmpty {
+            projects = payload.projects
+            loadedQueries.insert(.compose)
+            dataChanged = true
+        }
+        if networks.isEmpty, !payload.networks.isEmpty {
+            networks = payload.networks
+            loadedQueries.insert(.networks)
+            dataChanged = true
+        }
+        if volumes.isEmpty, !payload.volumes.isEmpty {
+            volumes = payload.volumes
+            loadedQueries.insert(.volumes)
+            dataChanged = true
+        }
+        if dataChanged { dataRevision &+= 1 }
+
+        if statsByKey.isEmpty, !payload.statsByKey.isEmpty {
+            statsByKey = payload.statsByKey
+            statsSucceeded = true
+            statsRevision &+= 1
+        }
+    }
+
+    private func schedulePersist() {
+        let key = activeAccountKey
+        guard !key.isEmpty, let url = Self.cacheFileURL(for: key) else { return }
+        let containersCopy = containers
+        let iconsCopy = icons
+        let imagesCopy = imageSnapshot.items
+        let projectsCopy = projects
+        let networksCopy = networks
+        let volumesCopy = volumes
+        let statsCopy = statsByKey
+
+        diskSaveTask?.cancel()
+        diskSaveTask = Task {
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            await Task.detached(priority: .utility) {
+                let snapshot = DockerPersistedSnapshot(
+                    containersJSON: JSONSerializer.stringify(.array(containersCopy)),
+                    iconsJSON: JSONSerializer.stringify(.array(iconsCopy)),
+                    imagesJSON: JSONSerializer.stringify(.array(imagesCopy)),
+                    composeJSON: JSONSerializer.stringify(.array(projectsCopy)),
+                    networksJSON: JSONSerializer.stringify(.array(networksCopy)),
+                    volumesJSON: JSONSerializer.stringify(.array(volumesCopy)),
+                    statsByKey: statsCopy,
+                    savedAt: Date().timeIntervalSince1970
+                )
+                guard let encoded = try? JSONEncoder().encode(snapshot) else { return }
+                let folder = url.deletingLastPathComponent()
+                try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try? encoded.write(to: url, options: .atomic)
+            }.value
+        }
+    }
+
+    // MARK: - Background Warmup & Off-Main-Thread Parsing
+
+    /// Runs while the authenticated app is foregrounded (`LuckyRoot`), keeping Docker lists and
+    /// container stats warm in memory and persisted on disk so opening Docker is instant.
+    func runBackgroundWarmup(credentials: LuckyCredentials) async {
+        guard !credentials.baseUrl.isEmpty, !credentials.token.isEmpty else { return }
+        activate(credentials: credentials)
+        let generation = activeGeneration
+
+        await hydrateFromDiskIfNeeded(credentials: credentials)
+
+        var cycle = 0
+        while !Task.isCancelled, generation == activeGeneration {
+            await refreshContainersAndStatsQuietly(generation: generation)
+            if cycle % 3 == 0 {
+                await refreshSecondaryListsQuietly(generation: generation)
+            }
+            cycle += 1
+            try? await Task.sleep(for: .seconds(20))
+        }
+    }
+
+    private func refreshContainersAndStatsQuietly(generation: UInt64) async {
+        guard !Task.isCancelled, generation == activeGeneration else { return }
+        _ = try? await refreshContainers(force: true, generation: generation)
+        guard !Task.isCancelled, generation == activeGeneration else { return }
+        await refreshStats(force: true, generation: generation)
+    }
+
+    private func refreshSecondaryListsQuietly(generation: UInt64) async {
+        guard !Task.isCancelled, generation == activeGeneration else { return }
+        async let imagesFetch = try? DockerService.images().items
+        async let composeFetch = try? DockerService.composeProjects().items
+        async let networksFetch = try? DockerService.networks().items
+        async let volumesFetch = try? DockerService.volumes().items
+
+        let (fetchedImages, fetchedCompose, fetchedNetworks, fetchedVolumes) = await (
+            imagesFetch, composeFetch, networksFetch, volumesFetch
+        )
+        guard !Task.isCancelled, generation == activeGeneration else { return }
+
+        var changed = false
+        if let fetchedImages {
+            let snapshot = await Task.detached(priority: .utility) {
+                DockerImageSnapshot(items: fetchedImages)
+            }.value
+            guard generation == activeGeneration else { return }
+            if snapshot.items != imageSnapshot.items || !loadedQueries.contains(.images) {
+                imageSnapshot = snapshot
+                changed = true
+            }
+            loadedQueries.insert(.images)
+            lastUpdated[.images] = Date()
+        }
+        if let fetchedCompose {
+            if fetchedCompose != projects || !loadedQueries.contains(.compose) {
+                projects = fetchedCompose
+                changed = true
+            }
+            loadedQueries.insert(.compose)
+            lastUpdated[.compose] = Date()
+        }
+        if let fetchedNetworks {
+            if fetchedNetworks != networks || !loadedQueries.contains(.networks) {
+                networks = fetchedNetworks
+                changed = true
+            }
+            loadedQueries.insert(.networks)
+            lastUpdated[.networks] = Date()
+        }
+        if let fetchedVolumes {
+            if fetchedVolumes != volumes || !loadedQueries.contains(.volumes) {
+                volumes = fetchedVolumes
+                changed = true
+            }
+            loadedQueries.insert(.volumes)
+            lastUpdated[.volumes] = Date()
+        }
+        if changed {
+            dataRevision &+= 1
+            schedulePersist()
+        }
+    }
+
+    @discardableResult
+    func refreshContainers(force: Bool = false, generation: UInt64? = nil) async throws -> [LuckyListItem] {
+        let expectedGen = generation ?? activeGeneration
+        if !force, !containers.isEmpty, isFresh(.containers) {
+            return containers
+        }
+        if containersRefreshInFlight {
+            return containers
+        }
+        containersRefreshInFlight = true
+        defer { containersRefreshInFlight = false }
+
+        let wantsIcons = !loadedQueries.contains(.iconLibrary) || icons.isEmpty
+        let items = try await DockerService.containers().items
+        guard expectedGen == activeGeneration else { return containers }
+
+        let changed = items != containers || !loadedQueries.contains(.containers)
+        containers = items
+        loadedQueries.insert(.containers)
+        lastUpdated[.containers] = Date()
+        if changed { dataRevision &+= 1 }
+
+        if wantsIcons, let library = try? await IconLibService.icons(), expectedGen == activeGeneration {
+            icons = library
+            loadedQueries.insert(.iconLibrary)
+            lastUpdated[.iconLibrary] = Date()
+            dataRevision &+= 1
+        }
+        let currentItems = containers
+        let currentIcons = icons
+        let prebuiltRows = await Task.detached(priority: .utility) {
+            DockerIconIndex.buildRows(items: currentItems, icons: currentIcons)
+        }.value
+        guard expectedGen == activeGeneration else { return containers }
+        DockerIconIndex.shared.seed(items: currentItems, icons: currentIcons, rows: prebuiltRows)
+        let iconPaths = prebuiltRows.map(\.icon)
+        Task { await DockerIconLoader.shared.prewarm(iconPaths) }
+        schedulePersist()
+        return items
+    }
+
+    func storeImages(_ snapshot: DockerImageSnapshot) {
+        lastUpdated[.images] = Date()
+        loadedQueries.insert(.images)
+        imageSnapshot = snapshot
+        dataRevision &+= 1
+        schedulePersist()
+    }
+
+    func storeList(_ target: DockerView, items: [LuckyListItem]) {
+        let query = DockerScreen.query(of: target)
+        lastUpdated[query] = Date()
+        loadedQueries.insert(query)
+        switch target {
+        case .images:
+            imageSnapshot = DockerImageSnapshot(items: items)
+        case .compose:
+            projects = items
+        case .networks:
+            networks = items
+        case .volumes:
+            volumes = items
+        default:
+            return
+        }
+        dataRevision &+= 1
+        schedulePersist()
+    }
+
+    func refreshStats(force: Bool = false, generation: UInt64? = nil) async {
+        let expectedGen = generation ?? activeGeneration
+        if !force, !statsByKey.isEmpty, isFresh(.containerStats, maxAge: 10) {
+            return
+        }
+        guard !statsRefreshInFlight else { return }
+        statsRefreshInFlight = true
+        defer { statsRefreshInFlight = false }
+
+        let snapshotContainers = containers
+        var payloads: [JSONValue] = []
+        var bulkFailed = false
+
+        do {
+            let fetched = try await DockerService.allContainerStats()
+            guard !Task.isCancelled, expectedGen == activeGeneration else { return }
+            stats = fetched
+            statsSucceeded = true
+            statsFailed = false
+            payloads.append(fetched)
+        } catch {
+            guard !error.isCancellation, !Task.isCancelled, expectedGen == activeGeneration else { return }
+            statsSucceeded = false
+            statsFailed = true
+            bulkFailed = true
+        }
+
+        var liveNeeded = bulkFailed
+        if !payloads.isEmpty {
+            let parsed = await Self.parseStatsOffMain(payloads: payloads, containers: snapshotContainers)
+            guard !Task.isCancelled, expectedGen == activeGeneration else { return }
+            applyMergedStats(parsed.byKey, containers: snapshotContainers)
+            liveNeeded = parsed.liveNeeded
+        }
+
+        if liveNeeded, !snapshotContainers.isEmpty {
+            await runLiveStatsSweep(
+                containers: snapshotContainers,
+                bulkPayload: stats,
+                generation: expectedGen
+            )
+        }
+        lastUpdated[.containerStats] = Date()
+    }
+
+    private func runLiveStatsSweep(
+        containers items: [LuckyListItem],
+        bulkPayload: JSONValue?,
+        generation expectedGen: UInt64
+    ) async {
+        let throttle = DockerThrottleBox()
+        do {
+            let fetched = try await DockerService.refreshContainerStats(items: items) { [weak self] partial in
+                guard throttle.shouldFlush(minInterval: 2.0) else { return }
+                let payloads = [bulkPayload, partial].compactMap { $0 }
+                Task.detached(priority: .utility) {
+                    let parsed = Self.parseStatsSync(payloads: payloads, containers: items)
+                    await MainActor.run {
+                        guard let self, self.activeGeneration == expectedGen else { return }
+                        self.applyMergedStats(parsed.byKey, containers: items, persist: false)
+                    }
+                }
+            }
+            guard !Task.isCancelled, expectedGen == activeGeneration else { return }
+            liveStats = fetched
+            liveStatsFailure = ""
+            let finalPayloads = [bulkPayload, fetched].compactMap { $0 }
+            let parsed = await Self.parseStatsOffMain(payloads: finalPayloads, containers: items)
+            guard !Task.isCancelled, expectedGen == activeGeneration else { return }
+            applyMergedStats(parsed.byKey, containers: items, persist: true)
+        } catch {
+            guard !error.isCancellation, !Task.isCancelled, expectedGen == activeGeneration else { return }
+            liveStatsFailure = error.luckyMessage()
+        }
+    }
+
+    private func applyMergedStats(
+        _ incoming: [String: DockerStatRow],
+        containers: [LuckyListItem],
+        persist: Bool = true
+    ) {
+        guard !incoming.isEmpty else { return }
+        var merged = statsByKey
+        for (key, row) in incoming {
+            merged[key] = row
+        }
+        if merged != statsByKey {
+            statsByKey = merged
+            statsRevision &+= 1
+            if persist { schedulePersist() }
+        }
+    }
+
+    private nonisolated static func parseStatsSync(
+        payloads: [JSONValue],
+        containers: [LuckyListItem]
+    ) -> (rows: [DockerStatRow], byKey: [String: DockerStatRow], liveNeeded: Bool) {
+        let source: JSONValue = payloads.count == 1 ? payloads[0] : .array(payloads)
+        let rows = DockerStats.rows(source, containers: containers)
+        let expected = containers.reduce(into: 0) { total, item in
+            let state = DockerStats.containerState(item)
+            if state == .running || state == .paused { total += 1 }
+        }
+        var byKey: [String: DockerStatRow] = [:]
+        byKey.reserveCapacity(rows.count * 2)
+        for row in rows {
+            byKey[row.key] = row
+            byKey[row.name] = row
+        }
+        return (rows, byKey, expected > rows.count)
+    }
+
+    private static func parseStatsOffMain(
+        payloads: [JSONValue],
+        containers: [LuckyListItem]
+    ) async -> (rows: [DockerStatRow], byKey: [String: DockerStatRow], liveNeeded: Bool) {
+        await Task.detached(priority: .utility) {
+            Self.parseStatsSync(payloads: payloads, containers: containers)
+        }.value
     }
 }

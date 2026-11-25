@@ -64,6 +64,7 @@ struct DockerScreen: View {
     @State var stats: JSONValue?
     @State var liveStats: JSONValue?
     @State var progressiveStats: JSONValue?
+    @State var statsByKey: [String: DockerStatRow] = [:]
     /// `containerStats.isSuccess` / `.error` / `.isLoading`, which §16 and §6 read separately.
     @State var statsSucceeded = false
     @State var statsFailed = false
@@ -77,6 +78,7 @@ struct DockerScreen: View {
     @State var loaded: Set<DockerQuery> = []
     @State var fetching = false
     @State var maintenanceFetching = false
+    @State private var cache = DockerStatsCache.shared
 
     // MARK: 浮层
 
@@ -126,18 +128,26 @@ struct DockerScreen: View {
         _view = State(initialValue: DockerView(rawValue: initialView) ?? .containers)
         _search = State(initialValue: initialSearch)
         let cache = DockerStatsCache.shared
+        cache.activate(credentials: LuckySession.shared.credentials)
         _stats = State(initialValue: cache.stats)
         _liveStats = State(initialValue: cache.liveStats)
         _containers = State(initialValue: cache.containers)
-        _statsSucceeded = State(initialValue: cache.stats != nil)
+        _icons = State(initialValue: cache.icons)
+        _imageSnapshot = State(initialValue: cache.imageSnapshot)
+        _projects = State(initialValue: cache.projects)
+        _networks = State(initialValue: cache.networks)
+        _volumes = State(initialValue: cache.volumes)
+        _statsByKey = State(initialValue: cache.statsByKey)
+        _loaded = State(initialValue: cache.loadedQueries)
+        _statsSucceeded = State(initialValue: cache.statsSucceeded || !cache.statsByKey.isEmpty)
     }
 
     var body: some View {
         chrome
             .task(id: view) { await loadView() }
-            .task(id: statsTaskID) { await pollStats() }
-            .task(id: liveStatsTaskID) { await pollLiveStats() }
             .task(id: logsTaskID) { await pollLogs() }
+            .onChange(of: cache.dataRevision) { syncListsFromCache() }
+            .onChange(of: cache.statsRevision) { syncStatsFromCache() }
     }
 }
 

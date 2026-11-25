@@ -324,8 +324,8 @@ struct LuckyHorizontalTabBar<Value: Hashable>: View {
                 }
             }
             .foregroundStyle(selected ? LuckyTheme.textOnAccent : LuckyTheme.textSecondary)
-            .padding(.horizontal, LuckyTheme.Space.m)
-            .frame(minHeight: 36)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 32)
             .background(
                 Capsule(style: .continuous)
                     .fill(selected ? LuckyTheme.accent : LuckyTheme.surface)

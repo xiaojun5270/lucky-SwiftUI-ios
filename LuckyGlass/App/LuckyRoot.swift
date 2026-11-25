@@ -5,8 +5,13 @@ import SwiftUI
 /// The system tab bar stays at its full size while content scrolls, so navigation does not shift
 /// under the user's thumb. Glass and blur still come from the native iOS 26 tab bar.
 struct LuckyRoot: View {
+    @Environment(\.scenePhase) private var phase
     @State private var navigator = LuckyNavigator()
     @State private var session = LuckySession.shared
+
+    private var warmupTaskID: String {
+        "\(session.sessionGeneration)|\(session.isAuthenticated)|\(phase == .active)"
+    }
 
     var body: some View {
         TabView(selection: $navigator.selection) {
@@ -19,6 +24,10 @@ struct LuckyRoot: View {
         .tabBarMinimizeBehavior(.never)
         .environment(\.luckyNavigator, navigator)
         .tint(LuckyTheme.accent)
+        .task(id: warmupTaskID) {
+            guard session.isAuthenticated, phase == .active else { return }
+            await DockerStatsCache.shared.runBackgroundWarmup(credentials: session.credentials)
+        }
     }
 
     /// `<Icon sf={{ default, selected }} />`: the filled glyph while the tab is current.

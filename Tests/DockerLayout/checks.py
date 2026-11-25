@@ -1,6 +1,5 @@
-"""Container-only 50% spacing contracts; Xcode rendering is verified on macOS CI."""
+"""Container-only compact layout & 50% metric/font compaction contracts; Xcode rendering is verified on macOS CI."""
 from pathlib import Path
-import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -8,22 +7,26 @@ DOCKER = ROOT / "LuckyGlass/Features/Docker"
 
 
 class DockerLayoutChecks(unittest.TestCase):
-    def test_container_card_and_parent_vertical_spacing_is_halved(self):
+    def test_container_card_and_parent_vertical_spacing_is_compacted(self):
         text = (DOCKER / "DockerContainersView.swift").read_text()
-        self.assertIn("spacing: LuckyTheme.Space.stack / 2, refresh: refresh", text)
+        self.assertIn("spacing: 6, refresh: refresh", text)
         card = text.split("private struct DockerContainerCard: View", 1)[1].split("#if DEBUG", 1)[0]
-        self.assertIn("LuckyCard(padding: 0)", card)
-        self.assertIn("VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2)", card)
-        self.assertIn(".padding(.horizontal, LuckyTheme.Space.cardInset)", card)
-        self.assertIn(".padding(.vertical, LuckyTheme.Space.cardInset / 2)", card)
-        self.assertIn("spacing: (LuckyTheme.Space.xs + 2) / 2", card)
-        self.assertIn("AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))", card)
-        # Horizontal geometry and tap targets are not density knobs.
-        for original in ["HStack(spacing: 11)", "size: 48)", ".frame(minHeight: 54)",
-                         "AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))",
-                         ".font(.system(size: 15, weight: .heavy))",
-                         ".font(.system(size: 10, weight: .semibold))"]:
-            self.assertIn(original, card)
+        self.assertIn("LuckyCard(radius: 14, padding: 0)", card)
+        self.assertIn("VStack(alignment: .leading, spacing: LuckyTheme.Space.xs)", card)
+        self.assertIn(".padding(.horizontal, LuckyTheme.Space.cardInset / 2)", card)
+        self.assertIn(".padding(.vertical, 6)", card)
+        self.assertIn("AnyLayout(VStackLayout(spacing: 4))", card)
+        self.assertIn("AnyLayout(HStackLayout(spacing: 5))", card)
+        # Compact 50%-shrunk container card header, icon, status badge and typography.
+        for compact_token in [
+            "HStack(spacing: 7)",
+            "size: 28)",
+            ".frame(minHeight: 28)",
+            ".font(.system(size: 12, weight: .bold))",
+            ".font(.system(size: 8.5, weight: .semibold))",
+            ".frame(minHeight: 16)",
+        ]:
+            self.assertIn(compact_token, card)
         self.assertIn("LuckyHairline()", card)
         self.assertNotIn(".scaleEffect(", card)
 
@@ -45,19 +48,22 @@ class DockerLayoutChecks(unittest.TestCase):
         grid = controls.split("struct ContainerStatsGrid: View", 1)[1].split("// MARK: - 行内按钮", 1)[0]
         self.assertIn("if dynamicTypeSize.isAccessibilitySize { return 1 }", grid)
         self.assertIn("return dynamicTypeSize >= .xxLarge ? 2 : 3", grid)
-        self.assertIn("count: columnCount), spacing: LuckyTheme.Space.s / 2)", grid)
-        self.assertIn("GridItem(.flexible(), spacing: LuckyTheme.Space.s)", grid)
-        self.assertIn("VStack(spacing: LuckyTheme.Space.s / 2)", grid)
-        self.assertIn(".padding(.vertical, LuckyTheme.Space.m / 2)", grid)
-        self.assertIn(".padding(.horizontal, LuckyTheme.Space.s)", grid)
+        self.assertIn("GridItem(.flexible(), spacing: LuckyTheme.Space.xs)", grid)
+        self.assertIn("count: columnCount), spacing: 3)", grid)
+        self.assertIn("HStack(spacing: 3)", grid)
+        self.assertIn(".padding(.horizontal, 6)", grid)
+        self.assertIn(".padding(.vertical, 4)", grid)
         self.assertNotIn("minHeight: 72", grid, "Fixed cell floor must not swallow the reduced padding")
-        for original in [".font(LuckyTheme.Text.captionMedium)", ".font(LuckyTheme.Text.caption)",
-                         ".font(LuckyTheme.Text.bodyMedium.weight(.semibold))",
-                         ".accessibilityElement(children: .combine)"]:
-            self.assertIn(original, grid)
+        for compact_metric in [
+            ".font(.system(size: 8.5, weight: .semibold))",
+            ".font(.system(size: 9, weight: .medium))",
+            ".font(.system(size: 10, weight: .semibold, design: .rounded))",
+            ".accessibilityElement(children: .combine)",
+        ]:
+            self.assertIn(compact_metric, grid)
         commands = controls.split("struct ContainerCommandButton: View", 1)[1].split("// MARK: - 面板滚动", 1)[0]
-        self.assertIn(".frame(minHeight: LuckyTheme.Space.touchTarget)", commands)
-        self.assertNotRegex(commands, r"touchTarget\s*/")
+        self.assertIn(".frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 38 : 28)", commands)
+        self.assertIn(".font(.system(size: 10.5, weight: .semibold))", commands)
 
 
 if __name__ == "__main__":

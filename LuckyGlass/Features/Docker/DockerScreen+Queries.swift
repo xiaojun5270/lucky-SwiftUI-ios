@@ -7,13 +7,68 @@ import SwiftUI
 /// query. `staleTime` has no counterpart — re-entering a view always refetches, which is a visible
 /// divergence on a fast tab bounce and a harmless one.
 extension DockerScreen {
-    /// `active.refetch()` on entry. 日志 owns its interval; statistics have their own task.
+    /// Syncs cached lists & icons hydrated or warmed in the background into view state.
+    func syncListsFromCache() {
+        let cache = DockerStatsCache.shared
+        if !cache.containers.isEmpty || cache.loadedQueries.contains(.containers) {
+            containers = cache.containers
+        }
+        if !cache.icons.isEmpty {
+            icons = cache.icons
+        }
+        if !cache.imageSnapshot.items.isEmpty || cache.loadedQueries.contains(.images) {
+            imageSnapshot = cache.imageSnapshot
+        }
+        if !cache.projects.isEmpty || cache.loadedQueries.contains(.compose) {
+            projects = cache.projects
+        }
+        if !cache.networks.isEmpty || cache.loadedQueries.contains(.networks) {
+            networks = cache.networks
+        }
+        if !cache.volumes.isEmpty || cache.loadedQueries.contains(.volumes) {
+            volumes = cache.volumes
+        }
+        loaded.formUnion(cache.loadedQueries)
+    }
+
+    /// Syncs off-main-thread pre-parsed telemetry without stalling scrolling.
+    func syncStatsFromCache() {
+        let cache = DockerStatsCache.shared
+        stats = cache.stats
+        liveStats = cache.liveStats
+        if !cache.statsByKey.isEmpty {
+            statsByKey = cache.statsByKey
+        }
+        statsSucceeded = cache.statsSucceeded || !cache.statsByKey.isEmpty
+        statsFailed = cache.statsFailed
+        liveStatsFailure = cache.liveStatsFailure
+    }
+
+    /// Entry-time load: serves disk-hydrated & background-warmed cache immediately with zero
+    /// network storm on page entry. Only fetches when a view has no warm cache yet.
     func loadView() async {
+        let cache = DockerStatsCache.shared
+        await cache.hydrateFromDiskIfNeeded(credentials: LuckySession.shared.credentials)
+        syncListsFromCache()
+        syncStatsFromCache()
+
         switch view {
         case .logs: return
-        case .containers: await loadContainers()
-        case .settings: await loadSettings()
-        default: await loadList(view)
+        case .containers:
+            // Background warmup keeps containers & stats fresh — never stall entry when cached.
+            if !cache.hasWarmData(for: .containers) {
+                await loadContainers(force: true)
+            }
+            if statsByKey.isEmpty {
+                await loadStats(force: false)
+            }
+        case .settings:
+            await loadSettings()
+        default:
+            let query = DockerScreen.query(of: view)
+            if !cache.hasWarmData(for: view) || !cache.isFresh(query, maxAge: 45) {
+                await loadList(view, force: !cache.hasWarmData(for: view))
+            }
         }
     }
 
@@ -22,19 +77,34 @@ extension DockerScreen {
     /// There is deliberately no `guard !fetching` prologue: `.task(id: view)` starts the next
     /// view's load before the cancelled one has returned, and a guard would drop it. The flag is
     /// instead cleared only by the load still standing on the view it started on.
-    private func loadList(_ target: DockerView) async {
+    private func loadList(_ target: DockerView, force: Bool = true) async {
         let key = DockerScreen.query(of: target)
-        fetching = true
+        let hasCached = DockerStatsCache.shared.hasWarmData(for: target)
+        if !hasCached || force { fetching = !hasCached }
         defer { if view == target { fetching = false } }
         do {
             switch target {
             case .images:
                 let items = try await DockerService.images().items
-                imageSnapshot = DockerImageSnapshot(items: items)
-            case .compose: projects = try await DockerService.composeProjects().items
-            case .networks: networks = try await DockerService.networks().items
-            case .volumes: volumes = try await DockerService.volumes().items
-            case .tasks: tasks = try await DockerService.tasks().items
+                let snapshot = await Task.detached(priority: .utility) {
+                    DockerImageSnapshot(items: items)
+                }.value
+                imageSnapshot = snapshot
+                DockerStatsCache.shared.storeImages(snapshot)
+            case .compose:
+                let items = try await DockerService.composeProjects().items
+                projects = items
+                DockerStatsCache.shared.storeList(.compose, items: items)
+            case .networks:
+                let items = try await DockerService.networks().items
+                networks = items
+                DockerStatsCache.shared.storeList(.networks, items: items)
+            case .volumes:
+                let items = try await DockerService.volumes().items
+                volumes = items
+                DockerStatsCache.shared.storeList(.volumes, items: items)
+            case .tasks:
+                tasks = try await DockerService.tasks().items
             default: return
             }
             queryFailures[key] = ""
@@ -46,26 +116,20 @@ extension DockerScreen {
         }
     }
 
-    /// `containers` and `iconLibrary` share an `enabled`, so they load together. The library's
-    /// 30-minute `staleTime` becomes "read it once and keep it" — nothing in §26 invalidates it —
-    /// and its failure is never surfaced, because a container without artwork simply draws a glyph.
-    private func loadContainers() async {
-        let wantsIcons = !loaded.contains(.iconLibrary)
-        fetching = true
+    /// Refreshes containers & icons via `DockerStatsCache.shared` so results persist to disk.
+    private func loadContainers(force: Bool = false) async {
+        let hasCached = !containers.isEmpty
+        fetching = !hasCached
         defer { if view == .containers { fetching = false } }
         do {
-            let items = try await DockerService.containers().items
-            containers = items
-            DockerStatsCache.shared.containers = items
+            _ = try await DockerStatsCache.shared.refreshContainers(force: force)
+            syncListsFromCache()
             queryFailures[.containers] = ""
             loaded.insert(.containers)
         } catch {
             guard !error.isCancellation else { return }
             queryFailures[.containers] = error.luckyMessage()
         }
-        guard wantsIcons, let library = try? await IconLibService.icons() else { return }
-        icons = library
-        loaded.insert(.iconLibrary)
     }
 
     /// 设置's three queries. They start together, as react-query mounts them together; the awaits
@@ -135,70 +199,13 @@ extension DockerScreen {
 // MARK: - 容器统计
 
 extension DockerScreen {
-    /// `containerStats`: `refetchInterval: 5_000`, `retry: false`. One bulk call covering every
-    /// container, which is why it is the cheap one and why its failure is not shown on its own.
-    func pollStats() async {
-        guard statsActive else { return }
-        await loadStats()
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await loadStats()
-        }
-    }
-
-    /// The three flags §2's gate reads. react-query's status is one of three values, so a refetch
-    /// that fails after a success clears `isSuccess` — and that is what turns the live sweep on.
-    private func loadStats() async {
-        // `isLoading` is `isPending && isFetching`: fetching, nothing cached, and no error yet.
-        statsLoading = stats == nil && !statsFailed
+    /// Container stats are refreshed off the main actor through `DockerStatsCache.shared`, so
+    /// manual refreshes and mutations stay single-flight, merged and persisted to disk.
+    private func loadStats(force: Bool = true) async {
+        statsLoading = statsByKey.isEmpty && !statsFailed
         defer { statsLoading = false }
-        do {
-            let fetched = try await DockerService.allContainerStats()
-            stats = fetched
-            DockerStatsCache.shared.stats = fetched
-            statsSucceeded = true
-            statsFailed = false
-        } catch {
-            guard !error.isCancellation else { return }
-            statsSucceeded = false
-            statsFailed = true
-        }
-    }
-
-    /// `liveContainerStats`: `refetchInterval: 15_000`, `retry: false`. One call per container, run
-    /// four at a time, which is why it only runs when the bulk sweep could not answer.
-    func pollLiveStats() async {
-        guard liveStatsNeeded else { return }
-        await loadLiveStats()
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(15))
-            guard !Task.isCancelled else { return }
-            await loadLiveStats()
-        }
-    }
-
-    private func loadLiveStats() async {
-        liveStatsLoading = liveStats == nil && liveStatsFailure.isEmpty
-        defer { liveStatsLoading = false }
-        // `setProgressiveContainerStats(undefined)` — the previous sweep's partials go before the
-        // next one starts streaming, so the grid never mixes two rounds.
-        progressiveStats = nil
-        let items = containers
-        // `State` is `Sendable` and its setter is nonmutating, so the box can cross into the
-        // progress callback where `self` could not.
-        let sink = $progressiveStats
-        do {
-            let fetched = try await DockerService.refreshContainerStats(items: items) { partial in
-                Task { @MainActor in sink.wrappedValue = partial }
-            }
-            liveStats = fetched
-            DockerStatsCache.shared.liveStats = fetched
-            liveStatsFailure = ""
-        } catch {
-            guard !error.isCancellation else { return }
-            liveStatsFailure = error.luckyMessage()
-        }
+        await DockerStatsCache.shared.refreshStats(force: force)
+        syncStatsFromCache()
     }
 }
 
@@ -207,27 +214,24 @@ extension DockerScreen {
 extension DockerScreen {
     /// The toolbar button and pull-to-refresh. 容器 also refreshes its statistics sweep.
     func refresh() async {
-        await reloadActive()
+        await reloadActive(force: true)
         guard statsActive else { return }
         await refreshStats()
     }
 
     /// Reload the current workspace. 日志 normally owns an interval, but manual refresh reads now.
-    private func reloadActive() async {
+    private func reloadActive(force: Bool = true) async {
         switch view {
         case .logs: await loadLogs()
-        case .containers: await loadContainers()
+        case .containers: await loadContainers(force: force)
         case .settings: await loadSettings()
-        default: await loadList(view)
+        default: await loadList(view, force: force)
         }
     }
 
-    /// `containerStats.refetch(); if (liveStatsNeeded) liveContainerStats.refetch();` — either one
-    /// succeeding is enough to fill the grid, which is why the header's retry runs both.
+    /// Forces a background off-main-thread stats sweep and merges results into cache.
     func refreshStats() async {
-        await loadStats()
-        guard liveStatsNeeded else { return }
-        await loadLiveStats()
+        await loadStats(force: true)
     }
 
     /// §26's cascade. react-query refetches the mounted queries and marks the rest stale; every

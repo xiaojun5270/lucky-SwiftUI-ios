@@ -26,13 +26,51 @@ final class DockerIconLoader {
 
     func failed(_ icon: String) -> Bool { failures.contains(icon) }
 
-    /// Resolves the icon path, fetches it once, and caches the result. Concurrent callers for the
-    /// same path — which is every visible row asking at once — collapse into the first request.
+    /// Quietly warms disk-cached or remote icons in background batches so opening Docker draws
+    /// container artwork on the very first frame without icon flicker.
+    func prewarm(_ icons: [String]) async {
+        let unique = Array(Set(icons.filter { !$0.isEmpty })).prefix(24)
+        for icon in unique {
+            guard !Task.isCancelled else { return }
+            guard cache[icon] == nil, !failures.contains(icon) else { continue }
+            await load(icon)
+        }
+    }
+
+    private static func iconCacheURL(for icon: String) -> URL? {
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in icon.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return root
+            .appendingPathComponent("LuckyDockerIcons", isDirectory: true)
+            .appendingPathComponent("\(String(hash, radix: 16)).img")
+    }
+
+    /// Resolves the icon path from disk cache first, then fetches once and persists to disk.
+    /// Concurrent callers for the same path collapse into the first request.
     func load(_ icon: String) async {
         guard !icon.isEmpty, cache[icon] == nil, !failures.contains(icon),
               !running.contains(icon) else { return }
         running.insert(icon)
         defer { running.remove(icon) }
+
+        let diskURL = Self.iconCacheURL(for: icon)
+        if let diskURL {
+            let diskHit = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                guard let data = try? Data(contentsOf: diskURL) else { return nil }
+                return UIImage(data: data)
+            }.value
+            if let diskHit {
+                cache[icon] = Image(uiImage: diskHit)
+                return
+            }
+        }
+
         guard let request = await Self.request(for: icon) else {
             failures.insert(icon)
             return
@@ -45,7 +83,13 @@ final class DockerIconLoader {
                 return
             }
             let decoded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
-                UIImage(data: data)
+                guard let image = UIImage(data: data) else { return nil }
+                if let diskURL {
+                    let folder = diskURL.deletingLastPathComponent()
+                    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try? data.write(to: diskURL, options: .atomic)
+                }
+                return image
             }.value
             guard let image = decoded else {
                 failures.insert(icon)
@@ -95,14 +139,12 @@ final class DockerIconIndex {
 
     private init() {}
 
-    /// Resolves every row as one memoized unit. Statistics change every five seconds; containers
-    /// and the icon catalogue usually do not. Exact value comparison makes a stats-only render an
-    /// immediate cache hit while still invalidating correctly if a label or catalogue entry changes.
-    func rows(items: [LuckyListItem], icons: [JSONValue]) -> [DockerContainerRow] {
-        if items == self.items, icons == library { return cachedRows }
+    /// Builds container rows off the main actor so entering the Docker screen never runs
+    /// `O(containers × icons)` icon-library matching on `@MainActor`.
+    nonisolated static func buildRows(items: [LuckyListItem], icons: [JSONValue]) -> [DockerContainerRow] {
         var seen = Set<String>()
         seen.reserveCapacity(items.count)
-        let rows = items.enumerated().map { index, item in
+        return items.enumerated().map { index, item in
             var row = DockerContainerRow(item, index)
             let base = row.identity
             var suffix = 1
@@ -113,6 +155,20 @@ final class DockerIconIndex {
             row.icon = DockerRecord.containerIcon(item, icons)
             return row
         }
+    }
+
+    func seed(items: [LuckyListItem], icons: [JSONValue], rows: [DockerContainerRow]) {
+        self.items = items
+        self.library = icons
+        self.cachedRows = rows
+    }
+
+    /// Resolves every row as one memoized unit. Statistics change every refresh cycle; containers
+    /// and the icon catalogue usually do not. Exact value comparison makes a stats-only render an
+    /// immediate cache hit while still invalidating correctly if a label or catalogue entry changes.
+    func rows(items: [LuckyListItem], icons: [JSONValue]) -> [DockerContainerRow] {
+        if items == self.items, icons == library { return cachedRows }
+        let rows = Self.buildRows(items: items, icons: icons)
         self.items = items
         library = icons
         cachedRows = rows
@@ -120,13 +176,13 @@ final class DockerIconIndex {
     }
 }
 
-/// §5.1. Drawn at 48 pt in the containers list, which is the only place it appears.
+/// §5.1. Compact container artwork tile in the containers list.
 struct ContainerArtwork: View {
     /// The library path, already resolved. Resolution is a scan of the whole library, so it happens
     /// once per row in `DockerContainersView` rather than once per body evaluation in here.
     var icon: String
     var running: Bool
-    var size: CGFloat = 44
+    var size: CGFloat = 28
 
     @State private var image: Image?
     /// The path `image` was actually loaded for. Without it `resolve` cleared the image on every
@@ -134,22 +190,21 @@ struct ContainerArtwork: View {
     /// fallback glyph and forced a second render pass through the whole list.
     @State private var loaded: String?
 
-    /// `borderRadius: Math.max(10, Math.round(size * 0.26))`
-    private var radius: CGFloat { max(10, (size * 0.26).rounded()) }
+    private var radius: CGFloat { max(7, (size * 0.25).rounded()) }
+    private var inset: CGFloat { size <= 32 ? 3 : 6 }
 
     var body: some View {
         ZStack {
             if let image {
-                // `contentFit="contain"` inside a frame 6 pt smaller than the tile.
                 image
                     .resizable()
                     .scaledToFit()
-                    .frame(width: size - 6, height: size - 6)
+                    .frame(width: size - inset, height: size - inset)
             } else {
                 LuckyFunctionIcon(
                     symbol: LuckySymbol.docker,
                     size: size,
-                    glyph: (size * 0.45).rounded(),
+                    glyph: (size * 0.48).rounded(),
                     color: running ? LuckyIconRole.docker.color : LuckyTheme.idle
                 )
             }
@@ -216,8 +271,8 @@ struct ContainerStatsGrid: View, Equatable {
     }
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
-                                 count: columnCount), spacing: LuckyTheme.Space.s / 2) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.xs),
+                                 count: columnCount), spacing: 3) {
             ForEach(metrics) { cell($0) }
         }
     }
@@ -238,32 +293,29 @@ struct ContainerStatsGrid: View, Equatable {
         }
     }
 
+    /// Compact single-line micro-tile (~50% tighter than the original stacked metric box).
     private func cell(_ metric: Metric) -> some View {
-        VStack(spacing: LuckyTheme.Space.s / 2) {
-            HStack(spacing: LuckyTheme.Space.xs) {
-                Image(systemName: LuckySymbol.solid(metric.symbol))
-                    .font(LuckyTheme.Text.captionMedium)
-                    .foregroundStyle(metric.tint)
-                    .accessibilityHidden(true)
-                Text(metric.label)
-                    .font(LuckyTheme.Text.caption)
-            }
-            .foregroundStyle(LuckyTheme.textSecondary)
+        HStack(spacing: 3) {
+            Image(systemName: LuckySymbol.solid(metric.symbol))
+                .font(.system(size: 8.5, weight: .semibold))
+                .foregroundStyle(metric.tint)
+                .accessibilityHidden(true)
+            Text(metric.label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(LuckyTheme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 2)
             Text(metric.value)
-                .font(LuckyTheme.Text.bodyMedium.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(LuckyTheme.textPrimary)
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                .minimumScaleFactor(0.65)
         }
-        .padding(.horizontal, LuckyTheme.Space.s)
-        .padding(.vertical, LuckyTheme.Space.m / 2)
-        // Size to the unchanged fonts plus explicit padding, including at accessibility sizes.
-        // The old 72 pt floor would silently reintroduce vertical whitespace after compaction.
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity)
-        .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
+        .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 7))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(metric.label) \(metric.value)")
     }
@@ -338,33 +390,33 @@ struct DockerIconButton: View {
     }
 }
 
-/// §5.4's `ContainerCommandButton` — the same shape, always sharing the row equally, with a
-/// slightly smaller glyph and a slightly larger label.
+/// §5.4's `ContainerCommandButton` — compact equal-width verb bar matching the shrunk container card.
 struct ContainerCommandButton: View {
     var symbol: String
     var label: String
     var tint: Color
     var disabled: Bool = false
     var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button {
             LuckyHaptic.light()
             action()
         } label: {
-            HStack(spacing: 5) {
-                LuckyFunctionIcon(symbol: symbol, size: 26, glyph: 12, color: tint)
+            HStack(spacing: 3) {
+                LuckyFunctionIcon(symbol: symbol, size: 15, glyph: 9, color: tint)
                 Text(label)
-                    .font(LuckyTheme.Text.label)
+                    .font(.system(size: 10.5, weight: .semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(LuckyTheme.textPrimary)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: LuckyTheme.Space.touchTarget)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 38 : 28)
             .background(LuckyTheme.surfaceRaised,
-                        in: .rect(cornerRadius: LuckyTheme.Radius.row))
+                        in: .rect(cornerRadius: 8))
             .overlay {
-                RoundedRectangle(cornerRadius: LuckyTheme.Radius.row)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(LuckyTheme.hairline, lineWidth: 1)
             }
         }

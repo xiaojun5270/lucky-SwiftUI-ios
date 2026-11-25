@@ -588,7 +588,7 @@ enum DockerStats {
 /// One row of `docker stats`, with a companion flag per field: a container that reports 0 B of
 /// network traffic and one that never reported any are different facts, and only the second draws
 /// a dash.
-struct DockerStatRow: Identifiable, Hashable, Sendable {
+struct DockerStatRow: Identifiable, Hashable, Sendable, Codable {
     var key: String
     var name: String
     var cpu: Double = 0

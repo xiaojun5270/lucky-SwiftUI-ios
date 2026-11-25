@@ -73,7 +73,7 @@ struct DockerContainersView: View {
                        empty: rows.isEmpty ? DockerView.containers.emptyMessage : "暂无符合条件的容器",
                        symbol: DockerView.containers.symbol,
                        loadingText: "正在读取容器",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             if !rows.isEmpty {
                 filterBar
             }
@@ -90,7 +90,7 @@ struct DockerContainersView: View {
     }
 
     private var filterBar: some View {
-        HStack(spacing: LuckyTheme.Space.s) {
+        HStack(spacing: 6) {
             ForEach(DockerContainerFilter.allCases) { option in
                 let selected = filter == option
                 let total = count(for: option)
@@ -99,18 +99,18 @@ struct DockerContainersView: View {
                     LuckyHaptic.selection()
                     withAnimation(LuckyTheme.Motion.snap) { filter = option }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text(option.title)
-                            .font(LuckyTheme.Text.captionMedium)
+                            .font(.system(size: 11, weight: .semibold))
                             .lineLimit(1)
                         Text("\(total)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .opacity(selected ? 0.9 : 0.7)
                     }
                     .foregroundStyle(selected ? option.tone.tint : LuckyTheme.textSecondary)
-                    .padding(.horizontal, LuckyTheme.Space.m)
-                    .frame(minHeight: 32)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 26)
                     .background(
                         Capsule(style: .continuous)
                             .fill(selected ? option.tone.fill : LuckyTheme.surface)
@@ -129,7 +129,7 @@ struct DockerContainersView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.bottom, LuckyTheme.Space.xs)
+        .padding(.bottom, 2)
     }
 }
 
@@ -140,7 +140,7 @@ struct DockerContainersView: View {
 /// Everything here is resolved in `init` and stored. These used to be computed properties, which on
 /// a `View` struct means they re-run on every body evaluation — the status phrase was being rebuilt
 /// from the raw record sixty times a second while scrolling.
-struct DockerContainerRow {
+struct DockerContainerRow: Equatable, Sendable {
     var key: String
     /// What `ForEach` diffs on. Normally the key; suffixed only if the daemon repeated one.
     var identity: String
@@ -193,9 +193,9 @@ private struct DockerContainerCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        // Keep the shared card and horizontal inset unchanged; only container rhythm is halved.
-        LuckyCard(padding: 0) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+        // Compact container card: ~50% tighter fonts, metric tiles, padding and rhythm.
+        LuckyCard(radius: 14, padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                 Button {
                     LuckyHaptic.light()
                     actions.menu(row.menu)
@@ -208,27 +208,26 @@ private struct DockerContainerCard: View {
                 LuckyHairline()
                 commands
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, LuckyTheme.Space.cardInset / 2)
+            .padding(.vertical, 6)
         }
     }
 
     private var heading: some View {
-        HStack(spacing: 11) {
-            ContainerArtwork(icon: row.icon, running: row.running, size: 48)
-            VStack(alignment: .leading, spacing: (LuckyTheme.Space.xs + 2) / 2) {
+        HStack(spacing: 7) {
+            ContainerArtwork(icon: row.icon, running: row.running, size: 28)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(row.displayName)
-                    .font(.system(size: 15, weight: .heavy))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(LuckyTheme.textPrimary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 badge
             }
-            // The 34×34 ellipsis affordance. The whole row is the button, so this only has to look
-            // like one.
-            LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 16, tone: .idle)
+            // Compact ellipsis affordance; the whole header row is the button.
+            LuckyIconTile(symbol: "ellipsis", size: 24, glyph: 12, tone: .idle)
         }
-        .frame(minHeight: 54)
+        .frame(minHeight: 28)
     }
 
     private var badgeTone: LuckyTone {
@@ -237,22 +236,22 @@ private struct DockerContainerCard: View {
         return .idle
     }
 
-    /// The status pill: a 6 pt dot and the uptime phrase, tinted by running / paused / stopped state.
+    /// Compact status pill: 5 pt dot + uptime phrase, tinted by running / paused / stopped state.
     private var badge: some View {
         let tone = badgeTone
-        return HStack(spacing: 5) {
+        return HStack(spacing: 4) {
             Circle()
                 .fill(tone.tint)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
             Text(row.status)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 8.5, weight: .semibold))
                 .foregroundStyle(tone == .idle ? LuckyTheme.textSecondary : tone.tint)
                 .lineLimit(1)
         }
-        .padding(.horizontal, LuckyTheme.Space.s)
-        .frame(minHeight: 24)
+        .padding(.horizontal, 5)
+        .frame(minHeight: 16)
         .background(tone == .idle ? LuckyTheme.surfaceRaised : tone.fill,
-                    in: .rect(cornerRadius: 8))
+                    in: .rect(cornerRadius: 5))
     }
 
     /// Three buttons, the first of which depends on the state. 恢复 and 启动 ask nothing; 停止 and
@@ -288,8 +287,8 @@ private struct DockerContainerCard: View {
 
     private var commandLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))
-            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
+            ? AnyLayout(VStackLayout(spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 5))
     }
 }
 

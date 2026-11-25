@@ -197,6 +197,38 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn("session.removeProfile(", dashboard)
         self.assertIn("LuckyStatusDot(tone: connected ? .ok : .warning, pulsing: connected", dashboard)
 
+    def test_docker_persistent_cache_and_background_warmup(self):
+        stats_core = source("Core/DockerStats.swift")
+        self.assertIn("struct DockerStatRow: Identifiable, Hashable, Sendable, Codable", stats_core)
+
+        model = source("Features/Docker/DockerScreenModel.swift")
+        for token in [
+            "struct DockerPersistedSnapshot: Codable, Sendable",
+            '"LuckyDockerCache"',
+            "func hydrateFromDiskIfNeeded(credentials: LuckyCredentials)",
+            "func runBackgroundWarmup(credentials: LuckyCredentials)",
+            "private func schedulePersist()",
+            "Task.detached(priority: .utility)",
+        ]:
+            self.assertIn(token, model)
+
+        root = source("App/LuckyRoot.swift")
+        self.assertIn("DockerStatsCache.shared.runBackgroundWarmup(credentials: session.credentials)", root)
+
+        docker_screen = source("Features/Docker/DockerScreen.swift")
+        self.assertNotIn("pollStats()", docker_screen)
+        self.assertNotIn("pollLiveStats()", docker_screen)
+        self.assertIn("cache.activate(credentials: LuckySession.shared.credentials)", docker_screen)
+
+        queries = source("Features/Docker/DockerScreen+Queries.swift")
+        self.assertIn("cache.hasWarmData(for: .containers)", queries)
+        self.assertIn("cache.hydrateFromDiskIfNeeded(credentials: LuckySession.shared.credentials)", queries)
+
+        controls = source("Features/Docker/DockerControls.swift")
+        self.assertIn('"LuckyDockerIcons"', controls)
+        self.assertIn("nonisolated static func buildRows(", controls)
+        self.assertIn("func prewarm(_ icons: [String])", controls)
+
 
 if __name__ == "__main__":
     unittest.main()

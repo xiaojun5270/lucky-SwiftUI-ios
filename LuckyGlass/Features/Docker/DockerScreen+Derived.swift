@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One row of the 镜像 list, pre-read. §3 builds these once per payload rather than per row because
 /// `searchText` stringifies the whole record and the filter runs on every keystroke.
-struct DockerImageEntry: Identifiable, Hashable {
+struct DockerImageEntry: Identifiable, Hashable, Sendable {
     var item: LuckyListItem
     var id: String
     var references: [String]
@@ -11,7 +11,7 @@ struct DockerImageEntry: Identifiable, Hashable {
 
 /// The payload and its derived index change together, only after a successful image-list read.
 /// Search, selection and unrelated state updates can then reuse the expensive JSON search text.
-struct DockerImageSnapshot {
+struct DockerImageSnapshot: Sendable {
     let items: [LuckyListItem]
     let entries: [DockerImageEntry]
     let ids: Set<String>
@@ -273,11 +273,11 @@ extension DockerScreen {
         return DockerStatsDigest(rows: rows, byKey: byKey, liveNeeded: liveNeeded)
     }
 
-    var liveStatsNeeded: Bool { containerStatsDigest.liveNeeded }
+    var liveStatsNeeded: Bool { false }
 
-    var containerStatRows: [DockerStatRow] { containerStatsDigest.rows }
+    var containerStatRows: [DockerStatRow] { Array(statsByKey.values) }
 
-    var containerStatsByKey: [String: DockerStatRow] { containerStatsDigest.byKey }
+    var containerStatsByKey: [String: DockerStatRow] { statsByKey }
 }
 
 // MARK: - 轮询门控
