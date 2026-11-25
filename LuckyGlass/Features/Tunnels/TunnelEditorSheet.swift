@@ -43,7 +43,7 @@ struct TunnelEditorSheet: View {
 
     var body: some View {
         ServiceSheet(title: editor.title, close: dismiss) {
-            LuckyPillButton(title: saveTitle, symbol: "square.and.arrow.down", prominent: true,
+            LuckyPillButton(title: saveTitle, symbol: "checkmark", prominent: true,
                             loading: saving) {
                 Task { await commit() }
             }

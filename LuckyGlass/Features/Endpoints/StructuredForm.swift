@@ -22,25 +22,39 @@ enum LuckyFieldName {
         return humanised(key)
     }
 
-    /// `key.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")` in one pass. The second regex
-    /// runs on the output of the first, which is why an underscore leaves a space behind as the
-    /// previous character and therefore never triggers a camel-case split.
+    /// Splits snake_case, camelCase and acronym boundaries cleanly (e.g. `acmeCADirURL` → `ACME CA Dir URL`).
     private static func humanised(_ key: String) -> String {
+        let chars = Array(key)
         var out = ""
-        var previous: Character?
-        for character in key {
-            if character == "_" {
+        for i in chars.indices {
+            let c = chars[i]
+            if c == "_" {
                 out.append(" ")
-                previous = " "
                 continue
             }
-            if let previous, previous.isASCIILower, character.isASCIIUpper {
-                out.append(" ")
+            if i > 0 {
+                let prev = chars[i - 1]
+                let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
+                let lowerToUpper = prev.isASCIILower && c.isASCIIUpper
+                let acronymToWord = prev.isASCIIUpper && c.isASCIIUpper && (next?.isASCIILower ?? false)
+                if lowerToUpper || acronymToWord {
+                    out.append(" ")
+                }
             }
-            out.append(character)
-            previous = character
+            out.append(c)
         }
         return out
+            .split(separator: " ")
+            .map { token -> String in
+                let lower = token.lowercased()
+                switch lower {
+                case "acme", "dns", "cname", "url", "uri", "ip", "ipv4", "ipv6", "tls", "ssl", "ca", "id", "tcp", "udp", "http", "https", "eab", "hmac", "api":
+                    return lower == "ipv4" ? "IPv4" : (lower == "ipv6" ? "IPv6" : lower.uppercased())
+                default:
+                    return String(token)
+                }
+            }
+            .joined(separator: " ")
     }
 
     /// `labels`, verbatim. Lucky mixes snake_case request fields with the PascalCase keys its Go
@@ -190,6 +204,112 @@ enum LuckyFieldName {
         "Headers": "请求头",
         "Params": "参数配置",
         "Disable": "已停用",
+        "info": "基本信息",
+        "Info": "基本信息",
+        "Key": "唯一标识",
+        "key": "唯一标识",
+        "ID": "编号",
+        "id": "编号",
+        "acmeCADirURL": "ACME 目录地址",
+        "ACMECADirURL": "ACME 目录地址",
+        "acmeCA": "证书颁发机构",
+        "ACMECA": "证书颁发机构",
+        "acmeCNAMESupport": "CNAME 支持",
+        "cnameSupport": "CNAME 支持",
+        "CNAMEFollow": "CNAME 支持",
+        "acmeDNSForceIPv4": "DNS 查询强制 IPv4",
+        "dnsQueryIPv4": "DNS 查询强制 IPv4",
+        "DNSQueryIPv4": "DNS 查询强制 IPv4",
+        "acmeDNSQueryTCP": "DNS 查询仅使用 TCP",
+        "dnsQueryTCP": "DNS 查询仅使用 TCP",
+        "DNSQueryTCP": "DNS 查询仅使用 TCP",
+        "acmeDNSID": "DNS 账号 ID",
+        "acmeDNSSecret": "DNS 密钥",
+        "acmeDNSName": "DNS 服务商",
+        "acmeDNSProvider": "DNS 服务商",
+        "acmeDomains": "签发域名",
+        "acmeEmail": "电子邮箱",
+        "acmeKeyType": "密钥算法",
+        "acmeUseIPv4": "使用 IPv4 申请证书",
+        "useIPv4": "使用 IPv4 申请证书",
+        "UseIPv4": "使用 IPv4 申请证书",
+        "acmePropagationTimeout": "传播检测超时（秒）",
+        "propagationTimeout": "传播检测超时（秒）",
+        "PropagationTimeout": "传播检测超时（秒）",
+        "acmeWaitTimeout": "等待签发超时（秒）",
+        "certTimeout": "等待签发超时（秒）",
+        "CertTimeout": "等待签发超时（秒）",
+        "acmeProxyType": "代理类型",
+        "proxyType": "代理类型",
+        "ProxyType": "代理类型",
+        "acmeProxyURL": "代理地址",
+        "proxyURL": "代理地址",
+        "ProxyURL": "代理地址",
+        "acmeEnableEAB": "启用 EAB 认证",
+        "enableEAB": "启用 EAB 认证",
+        "EnableEAB": "启用 EAB 认证",
+        "acmeEABKid": "EAB 密钥 ID",
+        "eabKid": "EAB 密钥 ID",
+        "EABKid": "EAB 密钥 ID",
+        "acmeEABHmacKey": "EAB HMAC 密钥",
+        "eabHmacKey": "EAB HMAC 密钥",
+        "EABHmacKey": "EAB HMAC 密钥",
+        "SyncAllClients": "同步全部客户端",
+        "CertBase64": "证书内容",
+        "KeyBase64": "私钥内容",
+        "ExpireTime": "到期时间",
+        "UpdateTime": "更新时间",
+        "CreateTime": "创建时间",
+        "PublicAddr": "公网地址",
+        "ListenAddr": "监听地址",
+        "TargetAddr": "目标地址",
+        "TargetPort": "目标端口",
+        "StunType": "穿透类型",
+        "ModuleEnable": "模块启用",
+        "LogLevel": "日志级别",
+        "MaxLogCount": "最大日志条数",
+        "Timeout": "超时时间",
+        "Interval": "检测间隔",
+        "DNS": "DNS 配置",
+        "Email": "电子邮箱",
+        "email": "电子邮箱",
+        "Secret": "密钥",
+        "secret": "密钥",
+        "Token": "访问令牌",
+        "token": "访问令牌",
+        "Password": "密码",
+        "password": "密码",
+        "Username": "用户名",
+        "username": "用户名",
+        "Certificate": "证书",
+        "PrivateKey": "私钥",
+        "Issuer": "颁发者",
+        "Subject": "主体",
+        "SerialNumber": "序列号",
+        "Fingerprint": "指纹",
+        "Algorithm": "密钥算法",
+        "algorithm": "密钥算法",
+        "KeyType": "密钥算法",
+        "CertConfig": "证书配置",
+        "certConfig": "证书配置",
+        "CertMapping": "证书映射",
+        "EnableCertMapping": "启用证书映射",
+        "enableCertMapping": "启用证书映射",
+        "RenewPrivateKey": "每次请求轮换私钥",
+        "renewPrivateKey": "每次请求轮换私钥",
+        "UseGlobalPrivateKey": "使用全局私钥",
+        "useGlobalPrivateKey": "使用全局私钥",
+        "Sequential": "串行化验证",
+        "sequential": "串行化验证",
+        "FindZoneByFqdn": "DNS 查询主域名",
+        "findZoneByFqdn": "DNS 查询主域名",
+        "DisableCompletePropagationRequirement": "禁用完整传播检查",
+        "disableCompletePropagationRequirement": "禁用完整传播检查",
+        "IgnorePropagationCheckError": "忽略传播检查错误",
+        "ignorePropagationCheckError": "忽略传播检查错误",
+        "DisableAuthoritativeNssPropagationRequirement": "禁用权威 NS 传播检查",
+        "disableAuthoritativeNssPropagationRequirement": "禁用权威 NS 传播检查",
+        "RecursiveNameservers": "自定义 DNS 服务器",
     ]
 }
 
@@ -651,6 +771,7 @@ private struct StructuredArrayField: View {
 struct StructuredRecordFields: View {
     @Binding var value: JSONObject
     var depth: Int = 0
+    var allowStructuralEdits: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
@@ -659,8 +780,10 @@ struct StructuredRecordFields: View {
             ForEach(value.keys, id: \.self) { key in
                 entry(key)
             }
-            StructuredAddField(existingKeys: value.keys) { key, item in
-                value[key] = item
+            if allowStructuralEdits {
+                StructuredAddField(existingKeys: value.keys) { key, item in
+                    value[key] = item
+                }
             }
         }
         .padding(depth > 0 ? LuckyTheme.Space.m : 0)
@@ -684,19 +807,22 @@ struct StructuredRecordFields: View {
                         .foregroundStyle(LuckyTheme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    StructuredTrashButton(field: key, size: 24, radius: 6) { remove(key) }
+                    if allowStructuralEdits {
+                        StructuredTrashButton(field: key, size: 28, radius: 8) { remove(key) }
+                    }
                 }
-                StructuredRecordFields(value: recordBinding(key), depth: depth + 1)
+                StructuredRecordFields(value: recordBinding(key), depth: depth + 1,
+                                       allowStructuralEdits: allowStructuralEdits)
             })
         }
         if current.isArray {
             // `depth` rather than `depth + 1`: a list inside an object is not a new box, so it does
             // not gain a border.
             return AnyView(StructuredArrayField(name: key, value: arrayBinding(key), depth: depth,
-                                                onRemove: { remove(key) }))
+                                                onRemove: allowStructuralEdits ? { remove(key) } : nil))
         }
         return AnyView(StructuredPrimitiveField(name: key, value: binding(key),
-                                                onRemove: { remove(key) }))
+                                                onRemove: allowStructuralEdits ? { remove(key) } : nil))
     }
 
     private func remove(_ key: String) {
@@ -725,9 +851,10 @@ struct StructuredRecordFields: View {
 /// `StructuredForm` — the exported entry point, and the only name the screens use.
 struct StructuredForm: View {
     @Binding var value: JSONObject
+    var allowStructuralEdits: Bool = true
 
     var body: some View {
-        StructuredRecordFields(value: $value)
+        StructuredRecordFields(value: $value, allowStructuralEdits: allowStructuralEdits)
     }
 }
 

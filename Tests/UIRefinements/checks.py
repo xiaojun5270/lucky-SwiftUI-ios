@@ -281,7 +281,8 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn("person.crop.circle.fill", page)
         self.assertIn("let work = Task { await refresh() }", page)
         dashboard = source("Features/Dashboard/DashboardScreen.swift")
-        self.assertIn("var badge: String? = nil", dashboard)
+        self.assertIn("var badge: String", dashboard)
+        self.assertIn(".frame(maxHeight: .infinity)", dashboard)
         self.assertIn("WebRulesCache.shared", dashboard)
 
         # 5. Tunnel screen stable entries, filter capsules & tap-to-copy STUN address
@@ -299,6 +300,22 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn("appearanceAndCache", settings)
         self.assertIn("DockerStatsCache.totalDiskCacheBytes()", settings)
         self.assertIn("clearAllDiskCaches()", settings)
+
+        # 7. SSL info unwrapping + ACME localization + clean structured config editor
+        records = source("Features/Services/ServiceRecords.swift")
+        self.assertIn('"info"', records)
+        self.assertIn('"文件证书"', records)
+        ssl_editors = source("Features/Services/SslCertificateEditors.swift")
+        self.assertIn('"acmeCADirURL"', ssl_editors)
+        self.assertIn('"acmeDNSID"', ssl_editors)
+        self.assertIn('"acmeDNSSecret"', ssl_editors)
+        self.assertIn('"DNS 账号 ID"', ssl_editors)
+        self.assertIn('"DNS 密钥"', ssl_editors)
+        form = source("Features/Endpoints/StructuredForm.swift")
+        self.assertIn('"acmeCADirURL": "ACME 目录地址"', form)
+        self.assertIn("var allowStructuralEdits: Bool = true", form)
+        service_form = source("Features/Services/ServiceFormEditor.swift")
+        self.assertIn("allowStructuralEdits: false", service_form)
 
 
 if __name__ == "__main__":

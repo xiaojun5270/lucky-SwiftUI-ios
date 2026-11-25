@@ -29,6 +29,7 @@ struct ServiceSheet<Content: View, Actions: View>: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectStyle(.soft, for: .bottom)
                 .scrollIndicators(.hidden)
             }
             .navigationTitle(title)
@@ -80,13 +81,13 @@ struct ServiceFormEditor: View {
 
     var body: some View {
         ServiceSheet(title: request.title, close: close) {
-            LuckyPillButton(title: busy ? "保存中" : "保存", symbol: "square.and.arrow.down",
+            LuckyPillButton(title: busy ? "保存中" : "保存", symbol: "checkmark",
                             prominent: true, loading: busy) {
                 save(value)
             }
         } content: {
             LuckyCard {
-                StructuredForm(value: $value)
+                StructuredForm(value: $value, allowStructuralEdits: false)
             }
         }
     }

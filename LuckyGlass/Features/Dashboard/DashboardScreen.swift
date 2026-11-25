@@ -236,7 +236,8 @@ private struct DashboardQuickLink: View {
     var title: String
     var symbol: String
     var iconRole: LuckyIconRole
-    var badge: String? = nil
+    var badge: String
+    var live: Bool = false
     var action: () -> Void
 
     var body: some View {
@@ -248,21 +249,22 @@ private struct DashboardQuickLink: View {
                 LuckyIconTile(symbol: symbol, size: 40, glyph: 19, role: iconRole)
                 Text(title)
                     .font(LuckyTheme.Text.captionMedium)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(LuckyTheme.textPrimary)
-                if let badge, !badge.isEmpty {
-                    Text(badge)
-                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LuckyTheme.textSecondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
+                Text(badge)
+                    .font(.system(size: 10, weight: live ? .semibold : .medium, design: .rounded))
+                    .foregroundStyle(live ? iconRole.color : LuckyTheme.textTertiary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 4)
             .frame(minWidth: LuckyTheme.Space.touchTarget, maxWidth: .infinity, minHeight: 64)
+            .frame(maxHeight: .infinity)
             .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: LuckyTheme.Radius.row))
             .overlay(
                 RoundedRectangle(cornerRadius: LuckyTheme.Radius.row)
@@ -285,16 +287,20 @@ private struct DashboardShortcuts: View {
               count: dynamicTypeSize >= .xxLarge ? 2 : 4)
     }
 
-    private var webBadge: String? {
-        guard webCache.loadedPanes.contains(.rules), !webCache.rules.isEmpty else { return nil }
-        return "\(webCache.enabledRuleCount) 启用"
+    private var hasWebLive: Bool {
+        webCache.loadedPanes.contains(.rules) && !webCache.rules.isEmpty
     }
 
-    private var dockerBadge: String? {
-        guard dockerCache.hasWarmData(for: .containers), !dockerCache.prebuiltContainerRows.isEmpty else {
-            return nil
-        }
-        return "\(dockerCache.runningContainerCount) 运行"
+    private var webBadge: String {
+        hasWebLive ? "\(webCache.enabledRuleCount) 启用" : "规则管理"
+    }
+
+    private var hasDockerLive: Bool {
+        dockerCache.hasWarmData(for: .containers) && !dockerCache.prebuiltContainerRows.isEmpty
+    }
+
+    private var dockerBadge: String {
+        hasDockerLive ? "\(dockerCache.runningContainerCount) 运行" : "容器管理"
     }
 
     var body: some View {
@@ -314,16 +320,20 @@ private struct DashboardShortcuts: View {
                 .foregroundStyle(LuckyTheme.accent)
             }
             LazyVGrid(columns: columns, spacing: LuckyTheme.Space.s) {
-                DashboardQuickLink(title: "反向代理", symbol: "network", iconRole: .web, badge: webBadge) {
+                DashboardQuickLink(title: "反向代理", symbol: "network", iconRole: .web,
+                                   badge: webBadge, live: hasWebLive) {
                     navigator.push(.webservice)
                 }
-                DashboardQuickLink(title: "Docker", symbol: "cube.transparent", iconRole: .docker, badge: dockerBadge) {
+                DashboardQuickLink(title: "Docker", symbol: "cube.transparent", iconRole: .docker,
+                                   badge: dockerBadge, live: hasDockerLive) {
                     navigator.push(.docker())
                 }
-                DashboardQuickLink(title: "动态域名", symbol: "globe.asia.australia", iconRole: .ddns) {
+                DashboardQuickLink(title: "动态域名", symbol: "globe.asia.australia", iconRole: .ddns,
+                                   badge: "域名解析") {
                     navigator.push(.service(.ddns))
                 }
-                DashboardQuickLink(title: "SSL 证书", symbol: "lock.shield", iconRole: .security) {
+                DashboardQuickLink(title: "SSL 证书", symbol: "lock.shield", iconRole: .security,
+                                   badge: "证书管理") {
                     navigator.push(.service(.ssl))
                 }
             }
@@ -494,7 +504,7 @@ private struct ReverseProxyCard: View {
                         .foregroundStyle(LuckyTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text("\(network) · \(host):\(visiblePort)")
+                    Text("\(network.uppercased()) · \(host):\(visiblePort)")
                         .font(LuckyTheme.Text.caption)
                         .foregroundStyle(LuckyTheme.textTertiary)
                         .lineLimit(1)

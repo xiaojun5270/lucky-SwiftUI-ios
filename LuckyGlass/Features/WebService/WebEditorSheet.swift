@@ -77,7 +77,7 @@ struct WebEditorSheet: View {
 
     var body: some View {
         ServiceSheet(title: request.title, close: close) {
-            LuckyPillButton(title: saveLabel, symbol: "square.and.arrow.down",
+            LuckyPillButton(title: saveLabel, symbol: "checkmark",
                             prominent: true, loading: busy) {
                 commit()
             }
@@ -430,7 +430,7 @@ extension WebEditorSheet {
         case .cgi: cgiForm
         // 模块设置 and 模板 have no named rows, so they edit as raw JSON — the same fallthrough the
         // original takes.
-        default: LuckyCard { StructuredForm(value: $value) }
+        default: LuckyCard { StructuredForm(value: $value, allowStructuralEdits: false) }
         }
     }
 

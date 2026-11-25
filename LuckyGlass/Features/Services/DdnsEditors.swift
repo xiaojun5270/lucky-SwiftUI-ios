@@ -543,7 +543,7 @@ struct DdnsTaskEditor: View {
     private var taskSheet: some View {
         ServiceSheet(title: request.title, close: close) {
             LuckyPillButton(title: saving ? "保存中" : (request.key.isEmpty ? "添加任务" : "保存任务"),
-                            symbol: "square.and.arrow.down", prominent: true, loading: saving) {
+                            symbol: "checkmark", prominent: true, loading: saving) {
                 submit()
             }
             .disabled(busy)
@@ -945,7 +945,7 @@ private struct DdnsRecordEditor: View {
         ServiceSheet(title: title, close: close) {
             LuckyPillButton(title: "返回", symbol: "chevron.left") { close() }
                 .disabled(busy)
-            LuckyPillButton(title: "保存记录", symbol: "square.and.arrow.down", prominent: true) {
+            LuckyPillButton(title: "保存记录", symbol: "checkmark", prominent: true) {
                 submit()
             }
             .disabled(busy)
@@ -1133,7 +1133,7 @@ struct DdnsSettingsEditor: View {
     var body: some View {
         ServiceSheet(title: request.title, close: close) {
             LuckyPillButton(title: saving ? "保存中" : "保存设置",
-                            symbol: "square.and.arrow.down", prominent: true, loading: saving) {
+                            symbol: "checkmark", prominent: true, loading: saving) {
                 submit()
             }
             .disabled(busy)

@@ -114,7 +114,7 @@ enum ServiceRecord {
     }
 
     private static let detailKeys = ["rule", "task", "container", "ssl", "certificate", "cert",
-                                     "configure", "setting", "data", "result"]
+                                     "info", "configure", "setting", "data", "result"]
 
     /// `detailValue(payload)` — peels the wrapper the module happened to use, up to six deep.
     ///
@@ -164,9 +164,16 @@ enum ServiceRecord {
             domains = list.map(\.asDisplayString)
         }
         let type = pick(item, ["AddFrom", "Type"], "file")
+        let typeLabel: String = switch type.lowercased() {
+        case "acme": "ACME"
+        case "file": "文件证书"
+        case "path": "路径证书"
+        case "sync": "同步证书"
+        default: type.uppercased()
+        }
         let expiry = pick(certs, ["NotAfterTime", "NotAfter", "ExpireTime"],
                           pick(item, ["ExpireTime", "UpdateTime"], ""))
-        let parts = [type.uppercased(), domains.joined(separator: ", "),
+        let parts = [typeLabel, domains.joined(separator: ", "),
                      expiry.isEmpty ? "" : "到期 \(expiry)"]
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }

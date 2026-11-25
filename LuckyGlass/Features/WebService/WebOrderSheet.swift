@@ -31,7 +31,7 @@ struct WebOrderSheet: View {
         ServiceSheet(title: "子规则排序", subtitle: subtitle,
                      close: { if !busy { close() } }) {
             LuckyPillButton(title: busy ? "保存中..." : "保存排序",
-                            symbol: "square.and.arrow.down", prominent: true, loading: busy) {
+                            symbol: "checkmark", prominent: true, loading: busy) {
                 save(keys)
             }
         } content: {

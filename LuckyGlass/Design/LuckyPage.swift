@@ -73,7 +73,7 @@ struct LuckyScreenHeader<Trailing: View>: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+        VStack(alignment: .leading, spacing: subtitleAction == nil ? LuckyTheme.Space.s : 4) {
             Text(title)
                 .font(LuckyTheme.Text.hero)
                 .foregroundStyle(LuckyTheme.textPrimary)
@@ -95,7 +95,7 @@ struct LuckyScreenHeader<Trailing: View>: View {
                             .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 5)
                     .background(LuckyTheme.surface, in: Capsule(style: .continuous))
                     .overlay(
                         Capsule(style: .continuous)

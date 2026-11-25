@@ -318,11 +318,11 @@ struct SslCertificateAddSheet: View {
         case .file:
             filePicker("证书", slot: .cert, name: certName, loaded: !certBase64.isEmpty,
                        symbol: "arrow.up.doc", placeholder: "选择要上传的证书文件")
-            filePicker("Key", slot: .key, name: keyName, loaded: !keyBase64.isEmpty,
-                       symbol: "key.horizontal", placeholder: "选择要上传的 Key 文件")
+            filePicker("私钥", slot: .key, name: keyName, loaded: !keyBase64.isEmpty,
+                       symbol: "key.horizontal", placeholder: "选择要上传的私钥文件")
         case .path:
             LuckyTextField(label: "证书路径", text: $certPath, mono: true)
-            LuckyTextField(label: "Key 路径", text: $keyPath, mono: true)
+            LuckyTextField(label: "私钥路径", text: $keyPath, mono: true)
         case .acme:
             LuckyTextField(label: "签发域名", text: $domains, placeholder: "每行填写一个域名",
                            multiline: true)
@@ -730,7 +730,7 @@ extension SslAcmeEditor {
         ServiceSheet(title: "编辑证书", close: close) {
             LuckyPillButton(title: "取消", symbol: "xmark") { close() }
                 .disabled(busy)
-            LuckyPillButton(title: busy ? "保存中..." : "修改", symbol: "square.and.arrow.down",
+            LuckyPillButton(title: busy ? "保存中..." : "保存", symbol: "checkmark",
                             prominent: true, loading: busy) {
                 submit()
             }
@@ -755,22 +755,26 @@ extension SslAcmeEditor {
         LuckyTextField(label: "证书备注", text: $remark)
         select("添加方式", ["AddFrom"], Self.addOptions)
         select("证书颁发机构", ["acmeCA", "ACMECA", "CA"], Self.caOptions)
+        if ext.has("acmeCADirURL") || ext.has("ACMECADirURL")
+            || read(["acmeCA", "ACMECA", "CA"], .string("")).asDisplayString == "custom" {
+            field("ACME 目录地址", ["acmeCADirURL", "ACMECADirURL"])
+        }
         toggle("EAB 认证", Self.eabKeys)
         if read(Self.eabKeys, .bool(false)).isTruthy {
-            field("EAB Key ID", ["eabKid", "EABKid", "EABKeyID"])
-            field("EAB HMAC Key", ["eabHmacKey", "EABHmacKey"], secret: true)
+            field("EAB 密钥 ID", ["acmeEABKid", "eabKid", "EABKid", "EABKeyID"])
+            field("EAB HMAC 密钥", ["acmeEABHmacKey", "eabHmacKey", "EABHmacKey"], secret: true)
         }
     }
 
     @ViewBuilder
     var dnsFields: some View {
-        select("验证方式", ["dnsProvider", "DNSProvider", "Provider", "Type"], Self.dnsOptions,
-               dnsField: true)
-        field("ID", ["ID", "id", "AccessKeyID", "AccessKeyId"], dnsField: true)
-        field("Secret", ["Secret", "secret", "AccessKeySecret"], dnsField: true, secret: true)
+        select("验证方式", ["acmeDNSName", "acmeDNSProvider", "dnsProvider", "DNSProvider", "Provider", "Type"],
+               Self.dnsOptions, dnsField: true)
+        field("DNS 账号 ID", ["acmeDNSID", "ID", "id", "AccessKeyID", "AccessKeyId"], dnsField: true)
+        field("DNS 密钥", ["acmeDNSSecret", "Secret", "secret", "AccessKeySecret"], dnsField: true, secret: true)
         field("域名/IP 列表", Self.domainKeys, fallback: .string(initialDomains), multiline: true)
-        field("电子邮箱", ["email", "Email"])
-        select("算法选择", ["algorithm", "Algorithm", "KeyType"], Self.algorithmOptions)
+        field("电子邮箱", ["acmeEmail", "email", "Email"])
+        select("算法选择", ["acmeKeyType", "algorithm", "Algorithm", "KeyType"], Self.algorithmOptions)
         select("证书配置", ["certConfig", "CertConfig", "CertificateProfile"],
                Self.certConfigOptions)
     }
@@ -799,14 +803,14 @@ extension SslAcmeEditor {
         toggle("使用全局私钥", ["useGlobalPrivateKey", "UseGlobalPrivateKey"])
         toggle("串行化验证", ["sequential", "Sequential"])
         toggle("通过 DNS 查询获取主域名", ["findZoneByFqdn", "FindZoneByFqdn"])
-        toggle("CNAME 支持", ["cnameSupport", "CNAMEFollow"])
-        toggle("使用 IPv4 网络申请证书", ["useIPv4", "UseIPv4"])
+        toggle("CNAME 支持", ["acmeCNAMESupport", "cnameSupport", "CNAMEFollow"])
+        toggle("使用 IPv4 网络申请证书", ["acmeUseIPv4", "useIPv4", "UseIPv4"])
     }
 
     @ViewBuilder
     var dnsToggles: some View {
-        toggle("DNS 查询强制 IPv4", ["dnsQueryIPv4", "DNSQueryIPv4"])
-        toggle("DNS 查询仅使用 TCP", ["dnsQueryTCP", "DNSQueryTCP"])
+        toggle("DNS 查询强制 IPv4", ["acmeDNSForceIPv4", "dnsQueryIPv4", "DNSQueryIPv4"])
+        toggle("DNS 查询仅使用 TCP", ["acmeDNSQueryTCP", "dnsQueryTCP", "DNSQueryTCP"])
         toggle("禁用完整传播要求", ["disableCompletePropagationRequirement",
                               "DisableCompletePropagationRequirement"])
         toggle("忽略传播检查错误", ["ignorePropagationCheckError",
