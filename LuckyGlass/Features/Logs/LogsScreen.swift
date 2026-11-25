@@ -66,7 +66,7 @@ struct LogsScreen: View {
             switch LuckyLogSeverity.detect(line) {
             case .warning: warnings += 1
             case .error: errors += 1
-            case .normal: break
+            case .standard: break
             }
         }
         warningCount = warnings
@@ -305,7 +305,7 @@ struct LogsScreen: View {
                 switch LuckyLogSeverity.detect(line) {
                 case .warning: warningCount += 1
                 case .error: errorCount += 1
-                case .normal: break
+                case .standard: break
                 }
                 if filter == .all && needle.isEmpty {
                     cachedVisibleLines.append(line)

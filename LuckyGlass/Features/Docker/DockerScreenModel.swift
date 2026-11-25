@@ -505,29 +505,33 @@ final class DockerStatsCache {
         prebuiltContainerRows.reduce(into: 0) { if $1.running { $0 += 1 } }
     }
 
+    private nonisolated static func diskCacheBytesSync() -> Int64 {
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return 0
+        }
+        let folders = ["LuckyDockerCache", "LuckyDockerIcons", "LuckyWebCache"]
+        var total: Int64 = 0
+        let fm = FileManager.default
+        for name in folders {
+            let dir = root.appendingPathComponent(name, isDirectory: true)
+            guard let enumerator = fm.enumerator(
+                at: dir,
+                includingPropertiesForKeys: [.fileSizeKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            for case let fileURL as URL in enumerator {
+                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    total += Int64(size)
+                }
+            }
+        }
+        return total
+    }
+
     /// Total disk usage across persistent Docker, icon and Web rule caches.
     static func totalDiskCacheBytes() async -> Int64 {
         await Task.detached(priority: .utility) {
-            guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-                return Int64(0)
-            }
-            let folders = ["LuckyDockerCache", "LuckyDockerIcons", "LuckyWebCache"]
-            var total: Int64 = 0
-            let fm = FileManager.default
-            for name in folders {
-                let dir = root.appendingPathComponent(name, isDirectory: true)
-                guard let enumerator = fm.enumerator(
-                    at: dir,
-                    includingPropertiesForKeys: [.fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                ) else { continue }
-                for case let fileURL as URL in enumerator {
-                    if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                        total += Int64(size)
-                    }
-                }
-            }
-            return total
+            Self.diskCacheBytesSync()
         }.value
     }
 
@@ -947,14 +951,15 @@ final class DockerStatsCache {
     ) async {
         let throttle = DockerThrottleBox()
         do {
-            let fetched = try await DockerService.refreshContainerStats(items: items) { [weak self] partial in
+            let fetched = try await DockerService.refreshContainerStats(items: items) { partial in
                 guard throttle.shouldFlush(minInterval: 2.0) else { return }
                 let payloads = [bulkPayload, partial].compactMap { $0 }
                 Task.detached(priority: .utility) {
                     let parsed = Self.parseStatsSync(payloads: payloads, containers: items)
                     await MainActor.run {
-                        guard let self, self.activeGeneration == expectedGen else { return }
-                        self.applyMergedStats(parsed.byKey, containers: items, persist: false)
+                        let cache = DockerStatsCache.shared
+                        guard cache.activeGeneration == expectedGen else { return }
+                        cache.applyMergedStats(parsed.byKey, containers: items, persist: false)
                     }
                 }
             }
