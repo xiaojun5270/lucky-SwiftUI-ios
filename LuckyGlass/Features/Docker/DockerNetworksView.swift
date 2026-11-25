@@ -9,17 +9,37 @@ struct DockerNetworksView: View {
     /// `(key, name)` — the mutation is keyed by `keyOf`, the confirmation quotes the name.
     var remove: (String, String) -> Void
 
+    private struct NetworkRowEntry: Identifiable {
+        var id: String
+        var item: LuckyListItem
+        var index: Int
+    }
+
+    private var rowEntries: [NetworkRowEntry] {
+        var seen = Set<String>()
+        seen.reserveCapacity(items.count)
+        return items.enumerated().map { index, item in
+            let base = DockerRecord.keyOf(item, index)
+            var id = base
+            var suffix = 1
+            while !seen.insert(id).inserted {
+                id = "\(base)#\(suffix)"
+                suffix += 1
+            }
+            return NetworkRowEntry(id: id, item: item, index: index)
+        }
+    }
+
     var body: some View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.networks.emptyMessage,
                        symbol: DockerView.networks.symbol,
                        loadingText: "正在读取 Docker 网络",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             EmptyView()
         } rows: {
-            ForEach(items.indices, id: \.self) { index in
-                let item = items[index]
-                DockerNetworkCard(item: item, index: index, busy: busy, remove: remove)
+            ForEach(rowEntries) { entry in
+                DockerNetworkCard(item: entry.item, index: entry.index, busy: busy, remove: remove)
             }
         }
     }
@@ -43,17 +63,17 @@ private struct DockerNetworkCard: View {
     }
 
     var body: some View {
-        LuckyCard(padding: 0) {
-            HStack(spacing: LuckyTheme.Space.s + 2) {
-                LuckyIconTile(symbol: DockerView.networks.symbol, size: 38, glyph: 19,
+        LuckyCard(radius: 14, padding: 0) {
+            HStack(spacing: 8) {
+                LuckyIconTile(symbol: DockerView.networks.symbol, size: 30, glyph: 15,
                               role: DockerView.networks.iconRole)
-                VStack(alignment: .leading, spacing: LuckyTheme.Space.hair) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(LuckyTheme.Text.cardTitle)
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(LuckyTheme.textPrimary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 10.5))
                         .foregroundStyle(LuckyTheme.textSecondary)
                         .lineLimit(1)
                 }
@@ -65,8 +85,8 @@ private struct DockerNetworkCard: View {
                     remove(key, name)
                 }
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 }

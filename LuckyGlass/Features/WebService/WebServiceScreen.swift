@@ -70,6 +70,15 @@ struct WebServiceScreen: View {
     @State private var editorFailure = ""
     @State private var toast: LuckyToast?
 
+    init() {
+        let cache = WebRulesCache.shared
+        cache.activate(credentials: LuckySession.shared.credentials)
+        _rules = State(initialValue: cache.rules)
+        _groups = State(initialValue: cache.groups)
+        _cgiItems = State(initialValue: cache.cgiItems)
+        _loaded = State(initialValue: cache.loadedPanes)
+    }
+
     var body: some View {
         shell
             // `<Page subtitle="…">`. The title comes from `LuckyRoute.webservice`, applied by the
@@ -625,7 +634,7 @@ extension WebServiceScreen {
         if pane == .logs {
             if keys.contains(.logs) { await loadLogs() }
         } else if keys.contains(query(of: pane)) {
-            await loadPane()
+            await loadPane(force: true)
         }
     }
 
@@ -652,17 +661,37 @@ extension WebServiceScreen {
     /// pane's load before the cancelled one has returned, and a guard would drop it. The flag is
     /// instead cleared only by the load that is still on the pane it started on; a duplicate read
     /// from pull-to-refresh is harmless, since the last write wins either way.
-    fileprivate func loadPane() async {
+    fileprivate func loadPane(force: Bool = false) async {
         let target = pane
         // 日志 is driven by `pollLogs`, whose task id carries the target, the page and the mode.
         guard target != .logs else { return }
-        fetching = true
-        defer { if pane == target { fetching = false } }
+        let cache = WebRulesCache.shared
+        await cache.hydrateFromDiskIfNeeded(credentials: LuckySession.shared.credentials)
+        if !cache.rules.isEmpty, rules.isEmpty { rules = cache.rules }
+        if !cache.groups.isEmpty, groups.isEmpty { groups = cache.groups }
+        if !cache.cgiItems.isEmpty, cgiItems.isEmpty { cgiItems = cache.cgiItems }
+        loaded.formUnion(cache.loadedPanes)
+
+        if !force, loaded.contains(target), cache.isFresh(target) {
+            return
+        }
+        let hasCached = loaded.contains(target)
+        if !hasCached { fetching = true }
+        defer { if pane == target && fetching { fetching = false } }
         do {
             switch target {
-            case .rules: rules = try await WebService.rules().items
-            case .groups: groups = try await WebService.groups(includeCounts: true).items
-            case .cgi: cgiItems = try await WebService.cgiList().items
+            case .rules:
+                let items = try await WebService.rules().items
+                rules = items
+                cache.store(.rules, items: items)
+            case .groups:
+                let items = try await WebService.groups(includeCounts: true).items
+                groups = items
+                cache.store(.groups, items: items)
+            case .cgi:
+                let items = try await WebService.cgiList().items
+                cgiItems = items
+                cache.store(.cgi, items: items)
             case .settings: settings = try await WebService.settings()
             case .tools: tips = try await WebService.tipInfo()
             case .logs: return
@@ -722,7 +751,7 @@ extension WebServiceScreen {
         if pane == .logs {
             await loadLogs()
         } else {
-            await loadPane()
+            await loadPane(force: true)
         }
     }
 
@@ -803,7 +832,7 @@ extension WebServiceScreen {
                                                                 tempId: request.tempId)
             }
             folderRequest = nil
-            if apply, pane == .rules { await loadPane() }
+            if apply, pane == .rules { await loadPane(force: true) }
         } catch {
             let message = error.luckyMessage(title)
             localFailure = message

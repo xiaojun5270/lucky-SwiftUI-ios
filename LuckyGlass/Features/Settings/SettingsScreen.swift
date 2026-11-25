@@ -2,20 +2,35 @@ import SwiftUI
 
 struct SettingsScreen: View {
     @State private var session = LuckySession.shared
+    @AppStorage(LuckyAppearance.storageKey) private var appearanceRaw = LuckyAppearance.system.rawValue
     @State private var busy = false
     @State private var confirming = false
     @State private var showingAccounts = false
+    @State private var cacheBytes: Int64 = 0
+    @State private var clearingCache = false
+    @State private var confirmingClearCache = false
     @State private var toast: LuckyToast?
 
     private var usesHTTPS: Bool {
         URL(string: session.baseUrl)?.scheme?.lowercased() == "https"
     }
 
+    private var appearanceBinding: Binding<LuckyAppearance> {
+        Binding(
+            get: { LuckyAppearance(rawValue: appearanceRaw) ?? .system },
+            set: { next in
+                LuckyHaptic.selection()
+                appearanceRaw = next.rawValue
+            }
+        )
+    }
+
     var body: some View {
-        LuckyPage(spacing: LuckyTheme.Space.section, maxWidth: LuckyTheme.Layout.settingsWidth) {
-            LuckyScreenHeader(title: "设置", subtitle: "账户、服务器与连接安全")
+        LuckyPage(spacing: LuckyTheme.Space.l, maxWidth: LuckyTheme.Layout.settingsWidth) {
+            LuckyScreenHeader(title: "设置", subtitle: "账户、外观、缓存与连接安全")
             account
             connection
+            appearanceAndCache
             security
             sessionActions
             VStack(spacing: LuckyTheme.Space.xs) {
@@ -32,6 +47,7 @@ struct SettingsScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .luckyToast($toast)
+        .task { cacheBytes = await DockerStatsCache.totalDiskCacheBytes() }
         .sheet(isPresented: $showingAccounts) {
             DashboardAccountPicker()
         }
@@ -40,6 +56,12 @@ struct SettingsScreen: View {
             Button("退出", role: .destructive) { leave() }
         } message: {
             Text("确定结束当前 Lucky 会话吗？")
+        }
+        .alert("清理本地缓存", isPresented: $confirmingClearCache) {
+            Button("取消", role: .cancel) {}
+            Button("清理", role: .destructive) { clearCache() }
+        } message: {
+            Text("将清除本地持久化的 Docker 列表、统计、图标与 Web 规则缓存，不影响服务器数据。")
         }
     }
 
@@ -125,13 +147,71 @@ struct SettingsScreen: View {
         }
     }
 
+    private var appearanceAndCache: some View {
+        LuckySection(title: "显示与缓存", spacing: LuckyTheme.Space.m) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                HStack(spacing: LuckyTheme.Space.s) {
+                    LuckyIconTile(symbol: "circle.lefthalf.filled", size: 28, glyph: 14, role: .settings)
+                    Text("外观主题")
+                        .font(LuckyTheme.Text.bodyMedium)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+                Picker("外观主题", selection: appearanceBinding) {
+                    ForEach(LuckyAppearance.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            LuckyHairline()
+            HStack(spacing: LuckyTheme.Space.m) {
+                LuckyIconTile(symbol: LuckySymbol.disk, size: 28, glyph: 14, role: .storage)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("本地缓存")
+                        .font(LuckyTheme.Text.bodyMedium)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                    Text("Docker、图标与 Web 规则 · \(Format.bytes(Double(cacheBytes)))")
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textSecondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    LuckyHaptic.warning()
+                    confirmingClearCache = true
+                } label: {
+                    Group {
+                        if clearingCache {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("清理")
+                        }
+                    }
+                    .font(LuckyTheme.Text.captionMedium)
+                    .foregroundStyle(cacheBytes > 0 ? LuckyTheme.danger : LuckyTheme.textTertiary)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 32)
+                    .background(
+                        (cacheBytes > 0 ? LuckyTheme.dangerSoft : LuckyTheme.surfaceRaised),
+                        in: .capsule
+                    )
+                }
+                .buttonStyle(LuckyPressStyle(pressedScale: 0.94, pressedOpacity: 0.75))
+                .disabled(clearingCache || cacheBytes == 0)
+                .accessibilityLabel("清理本地缓存")
+            }
+        }
+    }
+
     private var security: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckySection(title: "安全与隐私", spacing: LuckyTheme.Space.l) {
-                securityRow("key", "登录凭据", detail: "保存在设备系统钥匙串", role: .security)
-                LuckyHairline().padding(.leading, 52)
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckySection(title: "安全与隐私", spacing: LuckyTheme.Space.m) {
+                securityRow("key", "系统钥匙串", detail: "凭据仅存于本机钥匙串", role: .security)
+                LuckyHairline().padding(.leading, 40)
                 securityRow("lock.shield", "直连通信",
-                            detail: "直接访问你的 Lucky 实例，不经过任何第三方中转",
+                            detail: "直连 Lucky 实例，无第三方中转",
                             role: .security)
             }
             if !usesHTTPS {
@@ -146,10 +226,10 @@ struct SettingsScreen: View {
     private func securityRow(_ symbol: String, _ title: String, detail: String,
                              role: LuckyIconRole) -> some View {
         HStack(spacing: LuckyTheme.Space.m) {
-            LuckyIconTile(symbol: symbol, size: 36, glyph: 17, role: role)
-            VStack(alignment: .leading, spacing: 4) {
+            LuckyIconTile(symbol: symbol, size: 28, glyph: 14, role: role)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(LuckyTheme.Text.bodyMedium)
+                    .font(LuckyTheme.Text.captionMedium)
                     .foregroundStyle(LuckyTheme.textPrimary)
                 Text(detail)
                     .font(LuckyTheme.Text.caption)
@@ -181,6 +261,18 @@ struct SettingsScreen: View {
             }
             .buttonStyle(LuckyPressStyle())
             .disabled(busy)
+        }
+    }
+
+    private func clearCache() {
+        guard !clearingCache else { return }
+        clearingCache = true
+        Task {
+            await DockerStatsCache.shared.clearAllDiskCaches()
+            cacheBytes = await DockerStatsCache.totalDiskCacheBytes()
+            clearingCache = false
+            LuckyHaptic.success()
+            toast = .ok("已清理本地缓存")
         }
     }
 

@@ -63,17 +63,37 @@ struct DockerVolumesView: View {
     var importVolume: () -> Void
     var perform: (DockerVolumeVerb, String) -> Void
 
+    private struct VolumeRowEntry: Identifiable {
+        var id: String
+        var item: LuckyListItem
+        var index: Int
+    }
+
+    private var rowEntries: [VolumeRowEntry] {
+        var seen = Set<String>()
+        seen.reserveCapacity(items.count)
+        return items.enumerated().map { index, item in
+            let base = DockerRecord.pick(item, ["Name", "name"], DockerRecord.keyOf(item, index))
+            var id = base
+            var suffix = 1
+            while !seen.insert(id).inserted {
+                id = "\(base)#\(suffix)"
+                suffix += 1
+            }
+            return VolumeRowEntry(id: id, item: item, index: index)
+        }
+    }
+
     var body: some View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.volumes.emptyMessage,
                        symbol: DockerView.volumes.symbol,
                        loadingText: "正在读取数据卷",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             header
         } rows: {
-            ForEach(items.indices, id: \.self) { index in
-                let item = items[index]
-                DockerVolumeCard(item: item, index: index, busy: busy, perform: perform)
+            ForEach(rowEntries) { entry in
+                DockerVolumeCard(item: entry.item, index: entry.index, busy: busy, perform: perform)
             }
         }
     }
@@ -82,10 +102,10 @@ struct DockerVolumesView: View {
     /// belongs beside the list it adds to.
     private var header: some View {
         ServiceActionButton(title: "导入数据卷", symbol: LuckySymbol.upload, fill: .tinted,
-                            height: 44, radius: LuckyTheme.Radius.row, glyph: 16) {
+                            height: 34, radius: 9, glyph: 13) {
             importVolume()
         }
-        .padding(.bottom, LuckyTheme.Space.xs)
+        .padding(.bottom, 2)
     }
 }
 
@@ -113,42 +133,42 @@ private struct DockerVolumeCard: View {
     }
 
     var body: some View {
-        LuckyCard(padding: 0) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+        LuckyCard(radius: 14, padding: 0) {
+            VStack(alignment: .leading, spacing: 6) {
                 heading
                 LuckyHairline()
                 commandLayout {
                     ForEach(Self.primaryVerbs) { verb in
                         DockerIconButton(symbol: verb.symbol, label: verb.label, tint: verb.tint,
-                                         disabled: busy, fluid: true) {
+                                         disabled: busy, fluid: true, compact: true) {
                             perform(verb, name)
                         }
                     }
                 }
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
     private var heading: some View {
-        HStack(spacing: LuckyTheme.Space.s + 2) {
-            LuckyIconTile(symbol: DockerView.volumes.symbol, size: 38, glyph: 19,
+        HStack(spacing: 8) {
+            LuckyIconTile(symbol: DockerView.volumes.symbol, size: 30, glyph: 15,
                           role: DockerView.volumes.iconRole)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(LuckyTheme.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(LuckyTheme.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             moreMenu
         }
-        .frame(minHeight: 48)
+        .frame(minHeight: 34)
     }
 
     private var moreMenu: some View {
@@ -163,7 +183,7 @@ private struct DockerVolumeCard: View {
                 menuButton(.remove, role: .destructive)
             }
         } label: {
-            LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 16, tone: .idle)
+            LuckyIconTile(symbol: "ellipsis", size: 28, glyph: 14, tone: .idle)
         }
         .buttonStyle(.plain)
         .disabled(busy)

@@ -26,6 +26,7 @@ struct LuckyRoot: View {
         .tint(LuckyTheme.accent)
         .task(id: warmupTaskID) {
             guard session.isAuthenticated, phase == .active else { return }
+            await WebRulesCache.shared.hydrateFromDiskIfNeeded(credentials: session.credentials)
             await DockerStatsCache.shared.runBackgroundWarmup(credentials: session.credentials)
         }
     }

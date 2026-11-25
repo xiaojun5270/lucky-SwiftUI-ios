@@ -11,6 +11,7 @@ class DockerLayoutChecks(unittest.TestCase):
         text = (DOCKER / "DockerContainersView.swift").read_text()
         self.assertIn("spacing: 6, refresh: refresh", text)
         card = text.split("private struct DockerContainerCard: View", 1)[1].split("#if DEBUG", 1)[0]
+        self.assertIn("Equatable", card.splitlines()[0])
         self.assertIn("LuckyCard(radius: 14, padding: 0)", card)
         self.assertIn("VStack(alignment: .leading, spacing: LuckyTheme.Space.xs)", card)
         self.assertIn(".padding(.horizontal, LuckyTheme.Space.cardInset / 2)", card)

@@ -24,7 +24,10 @@ struct WebPaneScroll<Content: View>: View {
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await refresh() }
+        .refreshable {
+            let work = Task { await refresh() }
+            await work.value
+        }
     }
 }
 
@@ -128,25 +131,29 @@ struct WebRuleActionLabel: View {
     var symbol: String
     var selected: Bool = false
     var fills: Bool = true
+    var compact: Bool = false
+
+    private var cornerRadius: CGFloat { compact ? 9 : LuckyTheme.Radius.row }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) {
+            HStack(spacing: compact ? 4 : 6) {
                 Image(systemName: symbol).accessibilityHidden(true)
                 if let title { Text(title) }
             }
             .fixedSize()
             if let title { Text(title).fixedSize(horizontal: false, vertical: true) }
         }
-        .font(LuckyTheme.Text.label)
+        .font(compact ? .system(size: 11.5, weight: .semibold) : LuckyTheme.Text.label)
         .foregroundStyle(selected ? LuckyTheme.accent : LuckyTheme.textPrimary)
-        .padding(.horizontal, LuckyTheme.Space.s)
-        .padding(.vertical, LuckyTheme.Space.s)
-        .frame(minWidth: LuckyTheme.Space.touchTarget,
-               maxWidth: fills ? .infinity : nil, minHeight: LuckyTheme.Space.touchTarget)
+        .padding(.horizontal, compact ? 8 : LuckyTheme.Space.s)
+        .padding(.vertical, compact ? 5 : LuckyTheme.Space.s)
+        .frame(minWidth: compact ? 34 : LuckyTheme.Space.touchTarget,
+               maxWidth: fills ? .infinity : nil,
+               minHeight: compact ? 32 : LuckyTheme.Space.touchTarget)
         .background(selected ? LuckyTheme.accentSoft : LuckyTheme.surfaceRaised,
-                    in: .rect(cornerRadius: LuckyTheme.Radius.row))
-        .contentShape(.rect(cornerRadius: LuckyTheme.Radius.row))
+                    in: .rect(cornerRadius: cornerRadius))
+        .contentShape(.rect(cornerRadius: cornerRadius))
     }
 }
 
@@ -155,6 +162,7 @@ struct WebRuleActionButton: View {
     var symbol: String
     var selected: Bool = false
     var fills: Bool = true
+    var compact: Bool = false
     var disabled: Bool = false
     var action: () -> Void
 
@@ -163,7 +171,8 @@ struct WebRuleActionButton: View {
             LuckyHaptic.light()
             action()
         } label: {
-            WebRuleActionLabel(title: title, symbol: symbol, selected: selected, fills: fills)
+            WebRuleActionLabel(title: title, symbol: symbol, selected: selected,
+                               fills: fills, compact: compact)
         }
         .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.75))
         .disabled(disabled)

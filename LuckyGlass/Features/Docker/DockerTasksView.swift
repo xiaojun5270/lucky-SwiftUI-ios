@@ -14,7 +14,7 @@ struct DockerTasksView: View {
                        empty: DockerView.tasks.emptyMessage,
                        symbol: DockerView.tasks.symbol,
                        loadingText: "正在读取后台任务",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             EmptyView()
         } rows: {
             ForEach(items.indices, id: \.self) { index in
@@ -47,19 +47,19 @@ private struct DockerTaskCard: View {
     }
 
     var body: some View {
-        LuckyCard(padding: 0) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
-                HStack(spacing: LuckyTheme.Space.s + 2) {
-                    LuckyIconTile(symbol: DockerView.tasks.symbol, size: 36, glyph: 18,
+        LuckyCard(radius: 14, padding: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    LuckyIconTile(symbol: DockerView.tasks.symbol, size: 30, glyph: 15,
                                   role: DockerView.tasks.iconRole)
-                    VStack(alignment: .leading, spacing: LuckyTheme.Space.hair) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(title)
-                            .font(LuckyTheme.Text.cardTitle)
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(LuckyTheme.textPrimary)
                             .lineLimit(2)
                         if !status.isEmpty {
                             Text(status)
-                                .font(.system(size: 11))
+                                .font(.system(size: 10.5))
                                 .foregroundStyle(LuckyTheme.textSecondary)
                                 .lineLimit(2)
                         }
@@ -67,7 +67,7 @@ private struct DockerTaskCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 LuckyHairline()
-                HStack(spacing: LuckyTheme.Space.s) {
+                HStack(spacing: 6) {
                     DockerIconButton(symbol: LuckySymbol.search, label: "详情",
                                      tint: LuckyTheme.textPrimary, disabled: busy, fluid: true) {
                         inspect(key)
@@ -80,8 +80,8 @@ private struct DockerTaskCard: View {
                     }
                 }
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 }

@@ -236,6 +236,7 @@ private struct DashboardQuickLink: View {
     var title: String
     var symbol: String
     var iconRole: LuckyIconRole
+    var badge: String? = nil
     var action: () -> Void
 
     var body: some View {
@@ -250,6 +251,14 @@ private struct DashboardQuickLink: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(LuckyTheme.textPrimary)
+                if let badge, !badge.isEmpty {
+                    Text(badge)
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LuckyTheme.textSecondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 4)
@@ -268,10 +277,24 @@ private struct DashboardQuickLink: View {
 private struct DashboardShortcuts: View {
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var dockerCache = DockerStatsCache.shared
+    @State private var webCache = WebRulesCache.shared
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
               count: dynamicTypeSize >= .xxLarge ? 2 : 4)
+    }
+
+    private var webBadge: String? {
+        guard webCache.loadedPanes.contains(.rules), !webCache.rules.isEmpty else { return nil }
+        return "\(webCache.enabledRuleCount) 启用"
+    }
+
+    private var dockerBadge: String? {
+        guard dockerCache.hasWarmData(for: .containers), !dockerCache.prebuiltContainerRows.isEmpty else {
+            return nil
+        }
+        return "\(dockerCache.runningContainerCount) 运行"
     }
 
     var body: some View {
@@ -291,10 +314,10 @@ private struct DashboardShortcuts: View {
                 .foregroundStyle(LuckyTheme.accent)
             }
             LazyVGrid(columns: columns, spacing: LuckyTheme.Space.s) {
-                DashboardQuickLink(title: "反向代理", symbol: "network", iconRole: .web) {
+                DashboardQuickLink(title: "反向代理", symbol: "network", iconRole: .web, badge: webBadge) {
                     navigator.push(.webservice)
                 }
-                DashboardQuickLink(title: "Docker", symbol: "cube.transparent", iconRole: .docker) {
+                DashboardQuickLink(title: "Docker", symbol: "cube.transparent", iconRole: .docker, badge: dockerBadge) {
                     navigator.push(.docker())
                 }
                 DashboardQuickLink(title: "动态域名", symbol: "globe.asia.australia", iconRole: .ddns) {
@@ -678,6 +701,13 @@ struct DashboardScreen: View {
     @State private var rulesFailure = ""
     @State private var rulesFetching = false
 
+    init() {
+        let cache = WebRulesCache.shared
+        cache.activate(credentials: LuckySession.shared.credentials)
+        _rules = State(initialValue: cache.rules)
+        _rulesReady = State(initialValue: cache.loadedPanes.contains(.rules) || !cache.rules.isEmpty)
+    }
+
     private var live: LuckyStatusStore { .shared }
 
     /// `dockerActive = isFocused && appIsActive`.
@@ -691,7 +721,7 @@ struct DashboardScreen: View {
                     LuckyHaptic.light()
                     navigator.selection = .settings
                 } label: {
-                    LuckyMark(size: 46)
+                    LuckyMark(size: 38)
                         .frame(width: 52, height: 52)
                         .background(LuckyTheme.surface, in: .circle)
                         .overlay(
@@ -896,15 +926,24 @@ struct DashboardScreen: View {
     }
 
     /// `getWebServiceRules(false)` — the full list, not the lite one, because the preview rows
-    /// count sub-rules and the lite endpoint omits them.
+    /// count sub-rules and the lite endpoint omits them. Hydrates from disk cache first so cold
+    /// launch never flashes `--`, then persists refreshed rules for WebServiceScreen to reuse.
     private func loadRules() async {
+        let cache = WebRulesCache.shared
+        await cache.hydrateFromDiskIfNeeded(credentials: session.credentials)
+        if !rulesReady, cache.loadedPanes.contains(.rules) || !cache.rules.isEmpty {
+            rules = cache.rules
+            rulesReady = true
+        }
         guard !rulesFetching else { return }
         rulesFetching = true
         defer { rulesFetching = false }
         do {
-            rules = try await WebService.rules().items
+            let fetched = try await WebService.rules().items
+            rules = fetched
             rulesReady = true
             rulesFailure = ""
+            cache.store(.rules, items: fetched)
         } catch {
             guard !error.isCancellation else { return }
             rulesFailure = error.luckyMessage()

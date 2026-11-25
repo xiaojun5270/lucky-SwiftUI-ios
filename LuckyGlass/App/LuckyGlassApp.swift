@@ -10,11 +10,17 @@ import SwiftUI
 @main
 struct LuckyGlassApp: App {
     @State private var session = LuckySession.shared
+    @AppStorage(LuckyAppearance.storageKey) private var appearanceRaw = LuckyAppearance.system.rawValue
+
+    private var appearance: LuckyAppearance {
+        LuckyAppearance(rawValue: appearanceRaw) ?? .system
+    }
 
     var body: some Scene {
         WindowGroup {
             root
                 .tint(LuckyTheme.accent)
+                .preferredColorScheme(appearance.colorScheme)
                 .task {
                     guard !session.hydrated else { return }
                     await session.hydrate()

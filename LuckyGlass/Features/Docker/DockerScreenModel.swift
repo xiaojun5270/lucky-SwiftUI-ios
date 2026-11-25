@@ -430,6 +430,7 @@ final class DockerStatsCache {
     var projects: [LuckyListItem] = []
     var networks: [LuckyListItem] = []
     var volumes: [LuckyListItem] = []
+    private(set) var prebuiltContainerRows: [DockerContainerRow] = []
     private(set) var statsByKey: [String: DockerStatRow] = [:]
     private(set) var loadedQueries: Set<DockerQuery> = []
     private(set) var statsSucceeded = false
@@ -444,6 +445,7 @@ final class DockerStatsCache {
     private var lastUpdated: [DockerQuery: Date] = [:]
     private var statsRefreshInFlight = false
     private var containersRefreshInFlight = false
+    private var liveSweepTask: Task<Void, Never>?
     private var diskSaveTask: Task<Void, Never>?
 
     private init() {}
@@ -475,6 +477,8 @@ final class DockerStatsCache {
         guard key != activeAccountKey || credentials.generation != activeGeneration else { return }
         diskSaveTask?.cancel()
         diskSaveTask = nil
+        liveSweepTask?.cancel()
+        liveSweepTask = nil
         activeAccountKey = key
         activeGeneration = credentials.generation
         hydratedAccountKey = ""
@@ -497,9 +501,57 @@ final class DockerStatsCache {
         }
     }
 
+    var runningContainerCount: Int {
+        prebuiltContainerRows.reduce(into: 0) { if $1.running { $0 += 1 } }
+    }
+
+    /// Total disk usage across persistent Docker, icon and Web rule caches.
+    static func totalDiskCacheBytes() async -> Int64 {
+        await Task.detached(priority: .utility) {
+            guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+                return Int64(0)
+            }
+            let folders = ["LuckyDockerCache", "LuckyDockerIcons", "LuckyWebCache"]
+            var total: Int64 = 0
+            let fm = FileManager.default
+            for name in folders {
+                let dir = root.appendingPathComponent(name, isDirectory: true)
+                guard let enumerator = fm.enumerator(
+                    at: dir,
+                    includingPropertiesForKeys: [.fileSizeKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+                for case let fileURL as URL in enumerator {
+                    if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                        total += Int64(size)
+                    }
+                }
+            }
+            return total
+        }.value
+    }
+
+    /// Clears persistent Docker, icon and Web rule caches on disk and resets in-memory snapshots.
+    func clearAllDiskCaches() async {
+        clear()
+        WebRulesCache.shared.clear()
+        await Task.detached(priority: .utility) {
+            guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+                return
+            }
+            let fm = FileManager.default
+            for name in ["LuckyDockerCache", "LuckyDockerIcons", "LuckyWebCache"] {
+                let dir = root.appendingPathComponent(name, isDirectory: true)
+                try? fm.removeItem(at: dir)
+            }
+        }.value
+    }
+
     func clear() {
         diskSaveTask?.cancel()
         diskSaveTask = nil
+        liveSweepTask?.cancel()
+        liveSweepTask = nil
         hydratedAccountKey = ""
         resetMemory()
     }
@@ -513,6 +565,7 @@ final class DockerStatsCache {
         projects = []
         networks = []
         volumes = []
+        prebuiltContainerRows = []
         statsByKey = [:]
         loadedQueries = []
         lastUpdated = [:]
@@ -573,6 +626,7 @@ final class DockerStatsCache {
             dataChanged = true
         }
         if !payload.containerRows.isEmpty, containers == payload.containers, icons == payload.icons {
+            prebuiltContainerRows = payload.containerRows
             DockerIconIndex.shared.seed(items: payload.containers, icons: payload.icons, rows: payload.containerRows)
             let paths = payload.containerRows.map(\.icon)
             Task { await DockerIconLoader.shared.prewarm(paths) }
@@ -737,32 +791,49 @@ final class DockerStatsCache {
         defer { containersRefreshInFlight = false }
 
         let wantsIcons = !loadedQueries.contains(.iconLibrary) || icons.isEmpty
+        let previousContainers = containers
+        let previousRows = prebuiltContainerRows
+        let wasLoaded = loadedQueries.contains(.containers)
+
         let items = try await DockerService.containers().items
         guard expectedGen == activeGeneration else { return containers }
 
-        let changed = items != containers || !loadedQueries.contains(.containers)
-        containers = items
-        loadedQueries.insert(.containers)
-        lastUpdated[.containers] = Date()
-        if changed { dataRevision &+= 1 }
-
+        var latestIcons = icons
+        var iconsChanged = false
         if wantsIcons, let library = try? await IconLibService.icons(), expectedGen == activeGeneration {
-            icons = library
-            loadedQueries.insert(.iconLibrary)
-            lastUpdated[.iconLibrary] = Date()
-            dataRevision &+= 1
+            latestIcons = library
+            iconsChanged = true
         }
-        let currentItems = containers
-        let currentIcons = icons
-        let prebuiltRows = await Task.detached(priority: .utility) {
-            DockerIconIndex.buildRows(items: currentItems, icons: currentIcons)
+
+        // Diff raw JSON payloads & compute container rows off the main actor so pull-to-refresh
+        // never runs O(N) deep JSONValue equality or icon-library scanning on @MainActor.
+        let computed = await Task.detached(priority: .utility) { () -> (rows: [DockerContainerRow], containersChanged: Bool) in
+            let rows = DockerIconIndex.buildRows(items: items, icons: latestIcons)
+            let changed = !wasLoaded || rows != previousRows || items != previousContainers
+            return (rows, changed)
         }.value
         guard expectedGen == activeGeneration else { return containers }
-        DockerIconIndex.shared.seed(items: currentItems, icons: currentIcons, rows: prebuiltRows)
-        let iconPaths = prebuiltRows.map(\.icon)
-        Task { await DockerIconLoader.shared.prewarm(iconPaths) }
-        schedulePersist()
-        return items
+
+        loadedQueries.insert(.containers)
+        lastUpdated[.containers] = Date()
+        if iconsChanged {
+            icons = latestIcons
+            loadedQueries.insert(.iconLibrary)
+            lastUpdated[.iconLibrary] = Date()
+        }
+        if computed.containersChanged || iconsChanged {
+            containers = items
+            prebuiltContainerRows = computed.rows
+            DockerIconIndex.shared.seed(items: items, icons: latestIcons, rows: computed.rows)
+            dataRevision &+= 1
+            let iconPaths = computed.rows.map(\.icon)
+            Task { await DockerIconLoader.shared.prewarm(iconPaths) }
+            schedulePersist()
+        } else if prebuiltContainerRows.isEmpty, !computed.rows.isEmpty {
+            prebuiltContainerRows = computed.rows
+            DockerIconIndex.shared.seed(items: items, icons: latestIcons, rows: computed.rows)
+        }
+        return containers
     }
 
     func storeImages(_ snapshot: DockerImageSnapshot) {
@@ -793,7 +864,11 @@ final class DockerStatsCache {
         schedulePersist()
     }
 
-    func refreshStats(force: Bool = false, generation: UInt64? = nil) async {
+    func refreshStats(
+        force: Bool = false,
+        generation: UInt64? = nil,
+        awaitLiveFallback: Bool = true
+    ) async {
         let expectedGen = generation ?? activeGeneration
         if !force, !statsByKey.isEmpty, isFresh(.containerStats, maxAge: 10) {
             return
@@ -829,13 +904,40 @@ final class DockerStatsCache {
         }
 
         if liveNeeded, !snapshotContainers.isEmpty {
-            await runLiveStatsSweep(
-                containers: snapshotContainers,
-                bulkPayload: stats,
+            let bulkSnapshot = stats
+            if awaitLiveFallback {
+                await runLiveStatsSweep(
+                    containers: snapshotContainers,
+                    bulkPayload: bulkSnapshot,
+                    generation: expectedGen
+                )
+            } else {
+                // Pull-to-refresh must release UIRefreshControl smoothly instead of pinning it
+                // open for seconds during a 38-container fallback sweep.
+                scheduleBackgroundLiveSweep(
+                    containers: snapshotContainers,
+                    bulkPayload: bulkSnapshot,
+                    generation: expectedGen
+                )
+            }
+        }
+        lastUpdated[.containerStats] = Date()
+    }
+
+    private func scheduleBackgroundLiveSweep(
+        containers items: [LuckyListItem],
+        bulkPayload: JSONValue?,
+        generation expectedGen: UInt64
+    ) {
+        guard liveSweepTask == nil else { return }
+        liveSweepTask = Task { [weak self] in
+            defer { self?.liveSweepTask = nil }
+            await self?.runLiveStatsSweep(
+                containers: items,
+                bulkPayload: bulkPayload,
                 generation: expectedGen
             )
         }
-        lastUpdated[.containerStats] = Date()
     }
 
     private func runLiveStatsSweep(

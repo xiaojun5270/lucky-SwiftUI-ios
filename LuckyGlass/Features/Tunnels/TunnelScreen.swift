@@ -221,6 +221,25 @@ struct TunnelDetail: Identifiable {
     var item: JSONValue
 }
 
+private enum TunnelStatusFilter: String, CaseIterable, Identifiable {
+    case all, active, inactive
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: "全部"
+        case .active: "运行中"
+        case .inactive: "已停用"
+        }
+    }
+    var tone: LuckyTone {
+        switch self {
+        case .all: .brand
+        case .active: .ok
+        case .inactive: .idle
+        }
+    }
+}
+
 // MARK: - The screen
 
 /// `TunnelScreen({kind})` — 内网穿透, one screen for STUN, Cloudflared and FRP alike.
@@ -243,6 +262,7 @@ struct TunnelScreen: View {
     @State private var fetching = false
 
     @State private var search = ""
+    @State private var statusFilter: TunnelStatusFilter = .all
     @State private var editor: TunnelEditor?
     @State private var detail: TunnelDetail?
     @State private var natOpen = false
@@ -327,29 +347,122 @@ extension TunnelScreen {
         }
     }
 
+    private struct TunnelRowEntry: Identifiable {
+        var id: String
+        var key: String
+        var item: LuckyListItem
+        var index: Int
+        var isActive: Bool
+    }
+
+    private var rowEntries: [TunnelRowEntry] {
+        var seen = Set<String>()
+        seen.reserveCapacity(items.count)
+        return items.enumerated().map { offset, item in
+            let key = TunnelRecord.key(item)
+            let originalIndex = all.firstIndex { TunnelRecord.key($0) == key } ?? offset
+            let base = key.isEmpty ? "row-\(offset)" : key
+            var id = base
+            var suffix = 1
+            while !seen.insert(id).inserted {
+                id = "\(base)#\(suffix)"
+                suffix += 1
+            }
+            let active = TunnelRecord.tone(item) == .ok
+            return TunnelRowEntry(id: id, key: key, item: item, index: originalIndex, isActive: active)
+        }
+    }
+
     /// `<FlatList>` with its header and empty components. The header's action row has moved to the
-    /// glass bar and its search field to the navigation bar, so what is left of it is four banners.
+    /// glass bar and its search field to the navigation bar, so what is left of it is banners & filter.
     private var list: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: LuckyTheme.Space.stack) {
+        let entries = rowEntries
+        let activeCount = entries.reduce(into: 0) { if $1.isActive { $0 += 1 } }
+        let inactiveCount = entries.count - activeCount
+        let displayed: [TunnelRowEntry] = switch statusFilter {
+        case .all: entries
+        case .active: entries.filter(\.isActive)
+        case .inactive: entries.filter { !$0.isActive }
+        }
+
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 banners
+                if !entries.isEmpty {
+                    tunnelFilterBar(total: entries.count, active: activeCount, inactive: inactiveCount)
+                }
                 if !loaded {
                     LuckySkeleton(rows: 4)
                 }
-                ForEach(items.indices, id: \.self) { index in
-                    row(items[index])
+                ForEach(displayed) { entry in
+                    row(entry.item, key: entry.key, index: entry.index)
                 }
-                emptyState
+                if loaded, listFailure.isEmpty, displayed.isEmpty {
+                    LuckyEmptyState(symbol: TunnelRecord.symbol(kind),
+                                    title: entries.isEmpty
+                                        ? (search.isEmpty ? "暂无规则" : "没有匹配的规则")
+                                        : "暂无符合条件的规则")
+                }
             }
             .padding(.horizontal, LuckyTheme.Space.gutter)
-            .padding(.top, LuckyTheme.Space.pageTop)
+            .padding(.top, LuckyTheme.Space.s)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
             .frame(maxWidth: LuckyTheme.Layout.contentWidth)
             .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
-        .refreshable { await loadList() }
+        .refreshable {
+            let work = Task { await loadList() }
+            await work.value
+        }
+    }
+
+    private func tunnelFilterBar(total: Int, active: Int, inactive: Int) -> some View {
+        HStack(spacing: 6) {
+            ForEach(TunnelStatusFilter.allCases) { option in
+                let selected = statusFilter == option
+                let count: Int = switch option {
+                case .all: total
+                case .active: active
+                case .inactive: inactive
+                }
+                Button {
+                    guard !selected else { return }
+                    LuckyHaptic.selection()
+                    withAnimation(LuckyTheme.Motion.snap) { statusFilter = option }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(option.title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                        Text("\(count)")
+                            .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .opacity(selected ? 0.9 : 0.7)
+                    }
+                    .foregroundStyle(selected ? option.tone.tint : LuckyTheme.textSecondary)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 26)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(selected ? option.tone.fill : LuckyTheme.surface)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(
+                                selected ? option.tone.tint.opacity(0.35) : LuckyTheme.hairline.opacity(0.4),
+                                lineWidth: LuckyTheme.strokeWidth
+                            )
+                    )
+                    .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
+                .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, 2)
     }
 
     /// The mutation error, the list error, the success notice and the 模块未启用 warning, in the
@@ -419,21 +532,23 @@ extension TunnelScreen {
 // MARK: - Rows
 
 extension TunnelScreen {
-    /// One `Panel`. `index` is the row's place in the *unfiltered* list, because that is what 上移
-    /// and 下移 reorder — searching the list does not change what a swap means.
-    private func row(_ item: LuckyListItem) -> some View {
-        let key = TunnelRecord.key(item)
-        let index = all.firstIndex { TunnelRecord.key($0) == key } ?? -1
-        return LuckyCard(spacing: LuckyTheme.Space.s) {
-            rowHeader(item, key: key)
-            Text(TunnelRecord.summary(item, kind: kind))
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .textSelection(.enabled)
-            if kind == .stun {
-                publicAddress(item)
+    /// Compact card with tap-to-copy STUN address, compact primary verbs and overflow menu.
+    private func row(_ item: LuckyListItem, key: String, index: Int) -> some View {
+        LuckyCard(radius: 14, padding: 0, spacing: 0) {
+            VStack(alignment: .leading, spacing: 7) {
+                rowHeader(item, key: key)
+                Text(TunnelRecord.summary(item, kind: kind))
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .textSelection(.enabled)
+                if kind == .stun {
+                    publicAddress(item)
+                }
+                LuckyHairline()
+                verbs(item, key: key, index: index)
             }
-            verbs(item, key: key, index: index)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
         }
     }
 
@@ -441,19 +556,17 @@ extension TunnelScreen {
         let name = TunnelRecord.name(item)
         let state = TunnelRecord.state(item)
         let type = TunnelRecord.text(item["StunType"])
-        return HStack(alignment: .top, spacing: LuckyTheme.Space.m) {
-            LuckyIconTile(symbol: TunnelRecord.symbol(kind), role: kind.iconRole)
-            VStack(alignment: .leading, spacing: 5) {
+        return HStack(alignment: .center, spacing: 9) {
+            LuckyIconTile(symbol: TunnelRecord.symbol(kind), size: 32, glyph: 16, role: kind.iconRole)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(LuckyTheme.Text.bodyMedium)
+                    .font(.system(size: 13.5, weight: .bold))
                     .foregroundStyle(LuckyTheme.textPrimary)
-                    .lineLimit(2)
-                // `{text(item.StunType)} {state}` — one caption in the original, a word plus a chip
-                // here, which also drops the leading space the template emits without a `StunType`.
+                    .lineLimit(1)
                 HStack(spacing: LuckyTheme.Space.xs) {
                     if !type.isEmpty {
                         Text(type)
-                            .font(LuckyTheme.Text.caption)
+                            .font(.system(size: 10.5))
                             .foregroundStyle(LuckyTheme.textSecondary)
                     }
                     LuckyChip(text: state, tone: TunnelRecord.tone(item))
@@ -464,57 +577,91 @@ extension TunnelScreen {
                                      set: { next in toggleRule(key: key, enable: next) }))
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .tint(LuckyTheme.accent)
+                .controlSize(.small)
+                .tint(LuckyTheme.success)
                 .disabled(busy || key.isEmpty)
                 .accessibilityLabel("启用 \(name)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// `公网地址：{PublicAddr || '等待穿透'}`. The colour follows the raw value's truthiness while the
-    /// text goes through `text`, so a `PublicAddr` the module answers as `true` prints 等待穿透 in
-    /// green — a contradiction the original also draws, and one that says the field is malformed.
+    /// Tap-to-copy STUN public address pill when available.
+    @ViewBuilder
     private func publicAddress(_ item: LuckyListItem) -> some View {
         let address = TunnelRecord.text(item["PublicAddr"])
         let present = item["PublicAddr"]?.isTruthy == true
-        return Text("公网地址：\(address.isEmpty ? "等待穿透" : address)")
-            .font(LuckyTheme.Text.label)
-            .foregroundStyle(present ? LuckyTheme.success : LuckyTheme.textSecondary)
-            .textSelection(.enabled)
+        if present, !address.isEmpty {
+            Button {
+                LuckyHaptic.success()
+                copyAddress(item)
+            } label: {
+                HStack(spacing: 6) {
+                    Text("公网：\(address)")
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(LuckyTheme.success)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Image(systemName: LuckySymbol.copy)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(LuckyTheme.success)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(LuckyTheme.successSoft, in: .rect(cornerRadius: 8))
+            }
+            .buttonStyle(LuckyPressStyle(pressedScale: 0.98, pressedOpacity: 0.78))
+            .accessibilityLabel("复制公网地址 \(address)")
+        } else {
+            Text("公网地址：\(address.isEmpty ? "等待穿透" : address)")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(present ? LuckyTheme.success : LuckyTheme.textSecondary)
+                .textSelection(.enabled)
+        }
     }
 }
 
 // MARK: - Verbs
 
 extension TunnelScreen {
-    /// The row's verb row. `flexGrow: 1, flexBasis: 105` under `flexWrap` is an adaptive grid with
-    /// a 105pt minimum, and the original's `primarySoft` / `dangerBg` fills are both `.soft`.
+    /// Compact high-frequency verbs with reorder & delete tucked into the trailing menu.
     private func verbs(_ item: LuckyListItem, key: String, index: Int) -> some View {
-        LuckyTileGrid(minimum: 105, spacing: 7) {
-            verb("编辑", LuckySymbol.edit, disabled: busy || key.isEmpty) {
-                Task { await openEditor(item) }
-            }
-            verb("日志", LuckySymbol.logs, disabled: busy || key.isEmpty) {
-                openDetail(.logs, item)
-            }
-            childVerbs(item, key: key)
-            // The one verb the original leaves enabled during a mutation: it writes to the
-            // pasteboard, not to the server.
-            if kind == .stun, item["PublicAddr"]?.isTruthy == true {
-                verb("复制地址", LuckySymbol.copy, disabled: false) { copyAddress(item) }
-            }
-            verb("上移", "arrow.up", disabled: busy || key.isEmpty || index <= 0) {
-                move(item, -1)
-            }
-            verb("下移", "arrow.down",
-                 disabled: busy || key.isEmpty || index == all.count - 1) {
-                move(item, 1)
-            }
-            verb("删除", LuckySymbol.delete, disabled: busy || key.isEmpty, tone: .danger) {
-                confirm("删除 \(TunnelRecord.name(item))？") {
-                    try await TunnelsService.delete(kind, key: key)
+        HStack(spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 6)], spacing: 6) {
+                verb("编辑", LuckySymbol.edit, disabled: busy || key.isEmpty) {
+                    Task { await openEditor(item) }
                 }
+                verb("日志", LuckySymbol.logs, disabled: busy || key.isEmpty) {
+                    openDetail(.logs, item)
+                }
+                childVerbs(item, key: key)
             }
+            Menu {
+                if kind == .stun, item["PublicAddr"]?.isTruthy == true {
+                    Button("复制公网地址", systemImage: LuckySymbol.copy) { copyAddress(item) }
+                }
+                Section("规则顺序") {
+                    Button("上移", systemImage: "arrow.up") { move(item, -1) }
+                        .disabled(busy || key.isEmpty || index <= 0)
+                    Button("下移", systemImage: "arrow.down") { move(item, 1) }
+                        .disabled(busy || key.isEmpty || index == all.count - 1)
+                }
+                Section("危险操作") {
+                    Button("删除规则", systemImage: LuckySymbol.delete, role: .destructive) {
+                        confirm("删除 \(TunnelRecord.name(item))？") {
+                            try await TunnelsService.delete(kind, key: key)
+                        }
+                    }
+                    .disabled(busy || key.isEmpty)
+                }
+            } label: {
+                LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 15, tone: .idle)
+                    .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 9))
+            }
+            .buttonStyle(.plain)
+            .disabled(busy && !(kind == .stun && item["PublicAddr"]?.isTruthy == true))
+            .accessibilityLabel("\(TunnelRecord.name(item)) 的更多操作")
         }
     }
 
@@ -542,13 +689,12 @@ extension TunnelScreen {
         }
     }
 
-    /// `<Action>` — 42pt tall, 12pt radius, a tinted fill, and dimmed rather than hidden when it
-    /// does not apply, so the row's shape does not shift as a mutation runs.
+    /// Compact 34pt verb chip matching the rest of the streamlined service screens.
     private func verb(_ title: String, _ symbol: String, disabled: Bool,
                       tone: LuckyTone = .brand,
                       action: @escaping () -> Void) -> some View {
-        ServiceActionButton(title: title, symbol: symbol, tone: tone, fill: .soft, height: 42,
-                            radius: LuckyTheme.Radius.row, disabled: disabled, action: action)
+        ServiceActionButton(title: title, symbol: symbol, tone: tone, fill: .soft, height: 34,
+                            radius: 9, disabled: disabled, action: action)
     }
 }
 

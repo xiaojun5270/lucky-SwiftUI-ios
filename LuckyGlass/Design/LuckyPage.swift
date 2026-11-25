@@ -22,7 +22,10 @@ struct LuckyPage<Content: View>: View {
     @ViewBuilder
     private var scroll: some View {
         if let refresh {
-            base.refreshable { await refresh() }
+            base.refreshable {
+                let work = Task { await refresh() }
+                await work.value
+            }
         } else {
             base
         }
@@ -77,19 +80,31 @@ struct LuckyScreenHeader<Trailing: View>: View {
                 .accessibilityAddTraits(.isHeader)
             if let subtitleAction {
                 Button(action: subtitleAction) {
-                    HStack(spacing: LuckyTheme.Space.s) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(LuckyTheme.accent)
+                            .accessibilityHidden(true)
                         Text(subtitle)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Image(systemName: "chevron.down")
                             .font(LuckyTheme.Text.captionMedium)
+                            .foregroundStyle(LuckyTheme.textPrimary)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(LuckyTheme.textTertiary)
                             .accessibilityHidden(true)
                     }
-                    .font(LuckyTheme.Text.body)
-                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(LuckyTheme.surface, in: Capsule(style: .continuous))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(LuckyTheme.hairline.opacity(0.45), lineWidth: LuckyTheme.strokeWidth)
+                    )
                     .frame(minHeight: LuckyTheme.Space.touchTarget, alignment: .leading)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.78))
                 .accessibilityLabel("切换账号，\(subtitle)")
                 .accessibilityHint("查看已保存的账号或添加账号")
                 .accessibilityIdentifier("dashboard.accountSwitcher")

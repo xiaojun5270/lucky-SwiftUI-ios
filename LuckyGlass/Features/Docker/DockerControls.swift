@@ -364,22 +364,22 @@ struct DockerIconButton: View {
             LuckyHaptic.light()
             action()
         } label: {
-            HStack(spacing: compact ? 4 : 5) {
-                LuckyFunctionIcon(symbol: symbol, size: compact ? 18 : 26,
-                                  glyph: compact ? 11 : 12, color: tint)
+            HStack(spacing: compact ? 3 : 4) {
+                LuckyFunctionIcon(symbol: symbol, size: compact ? 15 : 18,
+                                  glyph: compact ? 10 : 11, color: tint)
                 Text(label)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .lineLimit(1)
-                    .minimumScaleFactor(compact ? 0.82 : 1)
+                    .minimumScaleFactor(compact ? 0.8 : 1)
             }
             .foregroundStyle(LuckyTheme.textPrimary)
-            .padding(.horizontal, compact ? 6 : 10)
-            .frame(minWidth: compact ? 0 : 64, minHeight: 42)
+            .padding(.horizontal, compact ? 5 : 8)
+            .frame(minWidth: compact ? 0 : 54, minHeight: 32)
             .frame(maxWidth: fluid ? .infinity : nil)
             .background(LuckyTheme.surfaceRaised,
-                        in: .rect(cornerRadius: LuckyTheme.Radius.row))
+                        in: .rect(cornerRadius: 9))
             .overlay {
-                RoundedRectangle(cornerRadius: LuckyTheme.Radius.row)
+                RoundedRectangle(cornerRadius: 9)
                     .stroke(LuckyTheme.hairline, lineWidth: 1)
             }
         }
@@ -452,7 +452,12 @@ struct DockerPaneScroll<Content: View>: View {
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await refresh() }
+        .refreshable {
+            // Run inside an unstructured task so early pull-release never cancels the request
+            // mid-flight and UIRefreshControl springs back smoothly at 120Hz.
+            let work = Task { await refresh() }
+            await work.value
+        }
     }
 }
 
@@ -506,7 +511,12 @@ struct DockerListPane<Header: View, Rows: View>: View {
         // `keyboardShouldPersistTaps="handled"` is RN's default-fighting flag; the iOS equivalent
         // is letting a drag dismiss the search keyboard rather than swallowing the first tap.
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await refresh() }
+        .refreshable {
+            // Run inside an unstructured task so early pull-release never cancels the request
+            // mid-flight and UIRefreshControl springs back smoothly at 120Hz.
+            let work = Task { await refresh() }
+            await work.value
+        }
     }
 }
 

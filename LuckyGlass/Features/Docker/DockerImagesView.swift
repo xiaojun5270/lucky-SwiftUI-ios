@@ -57,7 +57,7 @@ struct DockerImagesView: View {
                        empty: DockerView.images.emptyMessage,
                        symbol: DockerView.images.symbol,
                        loadingText: "正在读取镜像",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             header
         } rows: {
             ForEach(entries) { entry in
@@ -70,37 +70,36 @@ struct DockerImagesView: View {
 // MARK: - 表头
 
 extension DockerImagesView {
-    /// §11.1, minus 拉取: the primary verb of every list has moved into the glass bar, so what is
-    /// left here is 构建 on its own line, the advanced-tools door, and the two batch switches.
+    /// §11.1, minus 拉取: compact two-row utility header matching the tightened Docker cards.
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-            HStack(spacing: LuckyTheme.Space.s) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 ServiceActionButton(title: "构建", symbol: "hammer", fill: .solid,
-                                    height: 42, radius: LuckyTheme.Radius.row, glyph: 15) {
+                                    height: 34, radius: 9, glyph: 13) {
                     actions.build()
                 }
                 ServiceActionButton(title: "高级工具", symbol: "wrench.and.screwdriver",
-                                    fill: .card, height: 42,
-                                    radius: LuckyTheme.Radius.row,
-                                    name: "打开镜像高级工具", glyph: 15) {
+                                    fill: .card, height: 34,
+                                    radius: 9,
+                                    name: "打开镜像高级工具", glyph: 13) {
                     actions.tools()
                 }
             }
-            HStack(spacing: LuckyTheme.Space.s) {
+            HStack(spacing: 6) {
                 upgradeButton
                 modeButton
             }
             if batch.mode { panel }
         }
-        .padding(.bottom, LuckyTheme.Space.xs)
+        .padding(.bottom, 2)
     }
 
     /// 升级状态 with nothing selected, 检测所选 with a selection, 处理中 while either runs.
     private var upgradeButton: some View {
         ServiceActionButton(title: upgradeTitle, symbol: LuckySymbol.refresh, fill: .tinted,
-                            height: 44, radius: LuckyTheme.Radius.row,
+                            height: 34, radius: 9,
                             disabled: batch.actionBusy,
-                            busy: batch.upgradeChecking, name: upgradeName, glyph: 16) {
+                            busy: batch.upgradeChecking, name: upgradeName, glyph: 13) {
             actions.upgrade()
         }
     }
@@ -120,9 +119,9 @@ extension DockerImagesView {
     /// VoiceOver announce it as a toggle rather than reading two unrelated labels.
     private var modeButton: some View {
         ServiceActionButton(title: batch.mode ? "退出批量" : "批量操作", symbol: "checklist",
-                            fill: batch.mode ? .tinted : .card, height: 44,
-                            radius: LuckyTheme.Radius.row,
-                            disabled: batch.pending || batch.upgradeChecking, glyph: 16) {
+                            fill: batch.mode ? .tinted : .card, height: 34,
+                            radius: 9,
+                            disabled: batch.pending || batch.upgradeChecking, glyph: 13) {
             actions.toggleMode()
         }
         .accessibilityAddTraits(batch.mode ? .isSelected : [])
@@ -223,8 +222,8 @@ private struct DockerImageCard: View {
     private var selected: Bool { batch.selected.contains(entry.id) }
 
     var body: some View {
-        LuckyCard(padding: 0) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+        LuckyCard(radius: 14, padding: 0) {
+            VStack(alignment: .leading, spacing: 6) {
                 heading
                 // In selection mode the row is a checkbox and nothing else — the four verbs would all
                 // act on a single image while the user is choosing many.
@@ -233,29 +232,29 @@ private struct DockerImageCard: View {
                     verbs
                 }
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
     private var heading: some View {
-        HStack(spacing: LuckyTheme.Space.s + 2) {
+        HStack(spacing: 8) {
             if batch.mode { checkbox }
-            LuckyIconTile(symbol: DockerView.images.symbol, size: 38, glyph: 19,
+            LuckyIconTile(symbol: DockerView.images.symbol, size: 30, glyph: 15,
                           role: DockerView.images.iconRole)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 14, weight: .heavy))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(LuckyTheme.textPrimary)
                     .lineLimit(2)
                 Text(subtitle)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(LuckyTheme.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 48)
+        .frame(minHeight: 34)
     }
 
     /// `${key.slice(0, 16)} · ${bytes(item.Size)}` — the id head is enough to tell two `<none>`
@@ -320,7 +319,8 @@ private struct DockerImageCard: View {
                     Label("删除镜像", systemImage: LuckySymbol.delete)
                 }
             } label: {
-                LuckyIconTile(symbol: "ellipsis", size: 42, glyph: 17, tone: .idle)
+                LuckyIconTile(symbol: "ellipsis", size: 32, glyph: 15, tone: .idle)
+                    .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 9))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("镜像更多操作")

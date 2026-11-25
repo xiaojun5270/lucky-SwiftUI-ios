@@ -37,6 +37,9 @@ private enum DockerContainerFilter: String, CaseIterable, Identifiable {
 struct DockerContainersView: View {
     var items: [LuckyListItem]
     var icons: [JSONValue]
+    /// Pre-built container rows computed off the main actor when no search filter is active,
+    /// avoiding repeated deep `[JSONValue]` comparisons during scrolling and pull-to-refresh.
+    var prebuiltRows: [DockerContainerRow]? = nil
     var stats: [String: DockerStatRow]
     var loading: Bool
     var busy: Bool
@@ -45,55 +48,47 @@ struct DockerContainersView: View {
 
     @State private var filter: DockerContainerFilter = .all
 
-    /// Every row's derivation is memoized by the container and icon-library values. A statistics
-    /// tick therefore reuses the rows verbatim instead of repeating raw-record parsing or scanning
-    /// the whole icon catalogue.
-    private var rows: [DockerContainerRow] {
-        DockerIconIndex.shared.rows(items: items, icons: icons)
-    }
-
-    private var displayedRows: [DockerContainerRow] {
-        switch filter {
-        case .all: return rows
-        case .running: return rows.filter(\.running)
-        case .stopped: return rows.filter { !$0.running }
-        }
-    }
-
-    private func count(for option: DockerContainerFilter) -> Int {
-        switch option {
-        case .all: return rows.count
-        case .running: return rows.filter(\.running).count
-        case .stopped: return rows.filter { !$0.running }.count
-        }
-    }
-
     var body: some View {
+        let allRows = prebuiltRows ?? DockerIconIndex.shared.rows(items: items, icons: icons)
+        let runningCount = allRows.reduce(into: 0) { if $1.running { $0 += 1 } }
+        let stoppedCount = allRows.count - runningCount
+        let displayedRows: [DockerContainerRow] = {
+            switch filter {
+            case .all: return allRows
+            case .running: return allRows.filter(\.running)
+            case .stopped: return allRows.filter { !$0.running }
+            }
+        }()
+
         DockerListPane(count: displayedRows.count, loading: loading,
-                       empty: rows.isEmpty ? DockerView.containers.emptyMessage : "暂无符合条件的容器",
+                       empty: allRows.isEmpty ? DockerView.containers.emptyMessage : "暂无符合条件的容器",
                        symbol: DockerView.containers.symbol,
                        loadingText: "正在读取容器",
                        spacing: 6, refresh: refresh) {
-            if !rows.isEmpty {
-                filterBar
+            if !allRows.isEmpty {
+                filterBar(total: allRows.count, running: runningCount, stopped: stoppedCount)
             }
         } rows: {
             // Identified by the container itself rather than by its array offset. An offset shifts
             // for every row below an insertion, so starting or removing one container told SwiftUI
             // that every row after it was a different row and the whole list was rebuilt.
             ForEach(displayedRows, id: \.identity) { row in
-                // Each card gets the one statistics row it draws, not the whole table: handing the
-                // dictionary down meant any tick invalidated every card in the list.
+                // Equatable cards skip subtree diffing during pull-to-refresh and partial stats ticks.
                 DockerContainerCard(row: row, stat: row.stats(stats), busy: busy, actions: actions)
+                    .equatable()
             }
         }
     }
 
-    private var filterBar: some View {
+    private func filterBar(total: Int, running: Int, stopped: Int) -> some View {
         HStack(spacing: 6) {
             ForEach(DockerContainerFilter.allCases) { option in
                 let selected = filter == option
-                let total = count(for: option)
+                let count: Int = switch option {
+                case .all: total
+                case .running: running
+                case .stopped: stopped
+                }
                 Button {
                     guard !selected else { return }
                     LuckyHaptic.selection()
@@ -103,7 +98,7 @@ struct DockerContainersView: View {
                         Text(option.title)
                             .font(.system(size: 11, weight: .semibold))
                             .lineLimit(1)
-                        Text("\(total)")
+                        Text("\(count)")
                             .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .opacity(selected ? 0.9 : 0.7)
@@ -185,12 +180,16 @@ struct DockerContainerRow: Equatable, Sendable {
 
 // MARK: - 卡片
 
-private struct DockerContainerCard: View {
+private struct DockerContainerCard: View, Equatable {
     var row: DockerContainerRow
     var stat: DockerStatRow?
     var busy: Bool
     var actions: DockerContainerActions
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    static func == (lhs: DockerContainerCard, rhs: DockerContainerCard) -> Bool {
+        lhs.row == rhs.row && lhs.stat == rhs.stat && lhs.busy == rhs.busy
+    }
 
     var body: some View {
         // Compact container card: ~50% tighter fonts, metric tiles, padding and rhythm.

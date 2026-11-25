@@ -78,7 +78,9 @@ struct DockerScreen: View {
     @State var loaded: Set<DockerQuery> = []
     @State var fetching = false
     @State var maintenanceFetching = false
-    @State private var cache = DockerStatsCache.shared
+    @State var cache = DockerStatsCache.shared
+    @State var syncedDataRevision: UInt64 = 0
+    @State var syncedStatsRevision: UInt64 = 0
 
     // MARK: 浮层
 
@@ -140,6 +142,8 @@ struct DockerScreen: View {
         _statsByKey = State(initialValue: cache.statsByKey)
         _loaded = State(initialValue: cache.loadedQueries)
         _statsSucceeded = State(initialValue: cache.statsSucceeded || !cache.statsByKey.isEmpty)
+        _syncedDataRevision = State(initialValue: cache.dataRevision)
+        _syncedStatsRevision = State(initialValue: cache.statsRevision)
     }
 
     var body: some View {

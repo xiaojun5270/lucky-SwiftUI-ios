@@ -228,6 +228,77 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn('"LuckyDockerIcons"', controls)
         self.assertIn("nonisolated static func buildRows(", controls)
         self.assertIn("func prewarm(_ icons: [String])", controls)
+        self.assertIn("let work = Task { await refresh() }", controls)
+
+    def test_web_rules_removes_child_controls_and_docker_refresh_is_smooth(self):
+        rules = source("Features/WebService/WebRulesView.swift")
+        self.assertNotIn("private var childControls", rules)
+        self.assertNotIn("搜索域名、备注或后端地址", rules)
+        self.assertIn('Section("子规则管理")', rules)
+        self.assertIn('Button("添加子规则"', rules)
+        self.assertIn('Button("调整子规则顺序"', rules)
+
+        containers = source("Features/Docker/DockerContainersView.swift")
+        self.assertIn("var prebuiltRows: [DockerContainerRow]? = nil", containers)
+        self.assertIn("private struct DockerContainerCard: View, Equatable", containers)
+        self.assertIn(".equatable()", containers)
+
+        model = source("Features/Docker/DockerScreenModel.swift")
+        self.assertIn("private(set) var prebuiltContainerRows: [DockerContainerRow] = []", model)
+        self.assertIn("awaitLiveFallback: Bool = true", model)
+        self.assertIn("scheduleBackgroundLiveSweep(", model)
+
+        queries = source("Features/Docker/DockerScreen+Queries.swift")
+        self.assertIn("func refresh(fromPull: Bool = false)", queries)
+        self.assertIn("awaitLiveFallback: false", queries)
+        self.assertIn("syncedDataRevision != cache.dataRevision", queries)
+
+    def test_cross_page_polish_caches_appearance_and_compact_cards(self):
+        # 1. Web sub-rule card compaction & WebRulesCache
+        sub = source("Features/WebService/WebSubRuleCard.swift")
+        self.assertIn("LuckyCard(radius: 14, padding: 0, spacing: 0)", sub)
+        self.assertIn("compact: true", sub)
+        self.assertNotIn('"已启用" : "已停用"', sub)
+
+        web_model = source("Features/WebService/WebServiceModel.swift")
+        self.assertIn("final class WebRulesCache", web_model)
+        self.assertIn('"LuckyWebCache"', web_model)
+
+        # 2. Logs compact single-row status header + severity counts + incremental append
+        logs = source("Features/Logs/LogsScreen.swift")
+        self.assertIn("warningCount", logs)
+        self.assertIn("errorCount", logs)
+        self.assertIn("canIncrementallyAppend", logs)
+
+        # 3. DDNS/SSL compact card & inline toggle & stable row entries
+        detail = source("Features/Services/ServiceDetailScreen.swift")
+        self.assertIn("private struct ServiceRowEntry: Identifiable", detail)
+        self.assertIn("LuckyHorizontalTabBar(", detail)
+        self.assertIn("private func compactVerbs(", detail)
+
+        # 4. Dashboard account switcher pill & live quick-link badges
+        page = source("Design/LuckyPage.swift")
+        self.assertIn("person.crop.circle.fill", page)
+        self.assertIn("let work = Task { await refresh() }", page)
+        dashboard = source("Features/Dashboard/DashboardScreen.swift")
+        self.assertIn("var badge: String? = nil", dashboard)
+        self.assertIn("WebRulesCache.shared", dashboard)
+
+        # 5. Tunnel screen stable entries, filter capsules & tap-to-copy STUN address
+        tunnel = source("Features/Tunnels/TunnelScreen.swift")
+        self.assertIn("private enum TunnelStatusFilter", tunnel)
+        self.assertIn("private struct TunnelRowEntry: Identifiable", tunnel)
+        self.assertIn("tunnelFilterBar(", tunnel)
+
+        # 6. Settings appearance toggle + cache manager & app preferredColorScheme
+        theme = source("Design/LuckyTheme.swift")
+        self.assertIn("enum LuckyAppearance", theme)
+        app = source("App/LuckyGlassApp.swift")
+        self.assertIn(".preferredColorScheme(appearance.colorScheme)", app)
+        settings = source("Features/Settings/SettingsScreen.swift")
+        self.assertIn("appearanceAndCache", settings)
+        self.assertIn("DockerStatsCache.totalDiskCacheBytes()", settings)
+        self.assertIn("clearAllDiskCaches()", settings)
 
 
 if __name__ == "__main__":

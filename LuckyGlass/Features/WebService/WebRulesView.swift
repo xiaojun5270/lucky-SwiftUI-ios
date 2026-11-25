@@ -68,15 +68,9 @@ private struct WebRuleCard: View {
     var actions: WebRuleActions
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var query = ""
-    @State private var filter: WebSubRuleFilter = .all
 
     private var isOpen: Bool { expanded == entry.id }
     private var subs: [WebSubRuleEntry] { entry.subRules }
-    private var matchingSubs: [WebSubRuleEntry] { subs.filter { $0.matches(query) } }
-    private var visibleSubs: [WebSubRuleEntry] {
-        matchingSubs.filter { filter.includes($0) }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
@@ -145,7 +139,7 @@ private struct WebRuleCard: View {
         }
         .accessibilityLabel("\(entry.name)，\(subs.count) 条子规则")
         .accessibilityValue(isOpen ? "已展开" : "已收起")
-        .accessibilityHint(isOpen ? "收起子规则列表" : "展开、搜索和管理子规则")
+        .accessibilityHint(isOpen ? "收起子规则列表" : "展开和管理子规则")
     }
 
     private var editButton: some View {
@@ -157,6 +151,14 @@ private struct WebRuleCard: View {
 
     private var moreMenu: some View {
         Menu {
+            Section("子规则管理") {
+                Button("添加子规则", systemImage: LuckySymbol.add) { actions.editSub(entry.id, nil) }
+                    .disabled(busy)
+                Button("调整子规则顺序", systemImage: "list.number") {
+                    actions.order(WebOrderRequest(key: entry.id, name: entry.name, keys: subs.map(\.id)))
+                }
+                .disabled(busy || subs.count < 2)
+            }
             Section("规则顺序") {
                 Button("上移", systemImage: "arrow.up") { actions.move(entry.index, -1) }
                     .disabled(busy || entry.index == 0)
@@ -183,69 +185,22 @@ private struct WebRuleCard: View {
 
     private var expansion: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            childControls
             if subs.isEmpty {
                 LuckyEmptyState(symbol: "point.topleft.down.to.point.bottomright.curvepath",
-                                title: "暂无子规则", message: "添加子规则，配置前端与后端地址")
-            } else if visibleSubs.isEmpty {
-                LuckyEmptyState(symbol: LuckySymbol.search, title: "没有匹配的子规则",
-                                message: "尝试其他域名、备注或后端地址") {
-                    Button("清除搜索和筛选") { query = ""; filter = .all }
-                        .buttonStyle(.bordered)
+                                title: "暂无子规则", message: "添加子规则，配置前端与后端地址") {
+                    Button("添加子规则") { actions.editSub(entry.id, nil) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy)
                 }
             } else {
-                ForEach(visibleSubs) { sub in
+                ForEach(subs) { sub in
                     WebSubRuleCard(rule: entry, entry: sub, busy: busy, actions: actions)
                 }
-                if visibleSubs.count > 3 {
+                if subs.count > 3 {
                     WebRuleActionButton(title: "收起 \(entry.name) 的子规则", symbol: "chevron.up") {
                         actions.expand(entry.id)
                     }
                 }
-            }
-        }
-    }
-
-    private var childControls: some View {
-        LuckyCard(padding: LuckyTheme.Space.l, spacing: LuckyTheme.Space.m) {
-            LuckySectionHeader(title: "子规则", subtitle: "\(entry.name) · 显示 \(visibleSubs.count)/\(subs.count) 条")
-            childControlLayout {
-                WebRuleActionButton(title: "添加子规则", symbol: LuckySymbol.add,
-                                    selected: true, disabled: busy) {
-                    actions.editSub(entry.id, nil)
-                }
-                WebRuleActionButton(title: "调整顺序", symbol: "list.number",
-                                    disabled: busy || subs.count < 2) {
-                    actions.order(WebOrderRequest(key: entry.id, name: entry.name, keys: subs.map(\.id)))
-                }
-            }
-            if !subs.isEmpty {
-                LuckySearchField(text: $query, placeholder: "搜索域名、备注或后端地址",
-                                 fill: LuckyTheme.surfaceRaised)
-                statePicker
-            }
-        }
-    }
-
-    private var childControlLayout: AnyLayout {
-        dynamicTypeSize >= .xxLarge
-            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s))
-            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
-    }
-
-    @ViewBuilder
-    private var statePicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            stateOptions.pickerStyle(.menu)
-        } else {
-            stateOptions.pickerStyle(.segmented)
-        }
-    }
-
-    private var stateOptions: some View {
-        Picker("子规则状态", selection: $filter) {
-            ForEach(WebSubRuleFilter.allCases) { option in
-                Text("\(option.title) \(matchingSubs.filter { option.includes($0) }.count)").tag(option)
             }
         }
     }

@@ -118,18 +118,36 @@ struct DockerComposeView: View {
     var scan: () -> Void
     var perform: (DockerComposeVerb, DockerComposeTarget) -> Void
 
+    private struct ComposeRowEntry: Identifiable {
+        var id: String
+        var target: DockerComposeTarget
+    }
+
+    private var rowEntries: [ComposeRowEntry] {
+        var seen = Set<String>()
+        seen.reserveCapacity(items.count)
+        return items.enumerated().map { index, item in
+            let target = DockerComposeTarget(item, index)
+            var id = target.key
+            var suffix = 1
+            while !seen.insert(id).inserted {
+                id = "\(target.key)#\(suffix)"
+                suffix += 1
+            }
+            return ComposeRowEntry(id: id, target: target)
+        }
+    }
+
     var body: some View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.compose.emptyMessage,
                        symbol: DockerView.compose.symbol,
                        loadingText: "正在读取 Compose 项目",
-                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+                       spacing: 6, refresh: refresh) {
             header
         } rows: {
-            ForEach(items.indices, id: \.self) { index in
-                let item = items[index]
-                DockerComposeCard(target: DockerComposeTarget(item, index), busy: busy,
-                                  perform: perform)
+            ForEach(rowEntries) { entry in
+                DockerComposeCard(target: entry.target, busy: busy, perform: perform)
             }
         }
     }
@@ -138,11 +156,11 @@ struct DockerComposeView: View {
     /// is what is left of the two-button row.
     private var header: some View {
         ServiceActionButton(title: "扫描项目", symbol: LuckySymbol.search, fill: .tinted,
-                            height: 44, radius: LuckyTheme.Radius.row,
-                            name: "扫描 Compose 项目", glyph: 16) {
+                            height: 34, radius: 9,
+                            name: "扫描 Compose 项目", glyph: 13) {
             scan()
         }
-        .padding(.bottom, LuckyTheme.Space.xs)
+        .padding(.bottom, 2)
     }
 }
 
@@ -157,36 +175,37 @@ private struct DockerComposeCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        LuckyCard(padding: 0) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+        LuckyCard(radius: 14, padding: 0) {
+            VStack(alignment: .leading, spacing: 6) {
                 heading
                 LuckyHairline()
                 commands
             }
-            .padding(.horizontal, LuckyTheme.Space.cardInset)
-            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
     private var heading: some View {
-        HStack(spacing: 9) {
-            LuckyIconTile(symbol: DockerView.compose.symbol, size: 40, glyph: 20,
+        HStack(spacing: 8) {
+            LuckyIconTile(symbol: DockerView.compose.symbol, size: 30, glyph: 15,
                           role: DockerView.compose.iconRole)
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.hair) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(target.name)
-                    .font(LuckyTheme.Text.cardTitle)
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(LuckyTheme.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 // The path is what tells two projects of the same name apart, so it is printed even
                 // when it is empty — an empty line is itself the answer to "where is this?".
                 Text(target.path)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(LuckyTheme.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             moreMenu
         }
+        .frame(minHeight: 32)
     }
 
     private var moreMenu: some View {
@@ -210,7 +229,7 @@ private struct DockerComposeCard: View {
                 menuButton(.backupsClear, role: .destructive)
             }
         } label: {
-            LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 16, tone: .idle)
+            LuckyIconTile(symbol: "ellipsis", size: 28, glyph: 14, tone: .idle)
         }
         .buttonStyle(.plain)
         .disabled(busy)

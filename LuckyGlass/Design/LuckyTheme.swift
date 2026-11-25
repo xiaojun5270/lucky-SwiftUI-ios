@@ -146,6 +146,31 @@ enum LuckyTheme {
     static let strokeWidth: CGFloat = 1
 }
 
+/// User-selectable color scheme stored in `UserDefaults`.
+enum LuckyAppearance: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+
+    static let storageKey = "lucky_appearance"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "跟随系统"
+        case .light: "浅色"
+        case .dark: "深色"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
 extension UIColor {
     /// `0xRRGGBB` → opaque colour, in the sRGB (device) space so the hex matches the design values.
     convenience init(rgb: UInt32) {

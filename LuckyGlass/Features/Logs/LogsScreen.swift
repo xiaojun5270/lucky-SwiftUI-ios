@@ -35,6 +35,8 @@ struct LogsScreen: View {
 
     @State private var lines: [String] = []
     @State private var cachedVisibleLines: [String] = []
+    @State private var warningCount = 0
+    @State private var errorCount = 0
     @State private var cursor = ""
     @State private var startTime = ""
     @State private var failure = ""
@@ -52,16 +54,32 @@ struct LogsScreen: View {
 
     private var visibleLines: [String] { cachedVisibleLines }
 
+    private func matchesCurrentFilter(_ line: String, needle: String) -> Bool {
+        filter.includes(line)
+            && (needle.isEmpty || line.range(of: needle, options: .caseInsensitive) != nil)
+    }
+
+    private func recomputeSeverityCounts() {
+        var warnings = 0
+        var errors = 0
+        for line in lines {
+            switch LuckyLogSeverity.detect(line) {
+            case .warning: warnings += 1
+            case .error: errors += 1
+            case .normal: break
+            }
+        }
+        warningCount = warnings
+        errorCount = errors
+    }
+
     private func recomputeVisibleLines() {
         let needle = query.jsTrimmed
         if filter == .all, needle.isEmpty {
             cachedVisibleLines = lines
             return
         }
-        cachedVisibleLines = lines.filter { line in
-            filter.includes(line)
-                && (needle.isEmpty || line.range(of: needle, options: .caseInsensitive) != nil)
-        }
+        cachedVisibleLines = lines.filter { matchesCurrentFilter($0, needle: needle) }
     }
 
     private var statusTone: LuckyTone {
@@ -97,8 +115,8 @@ struct LogsScreen: View {
     @ViewBuilder
     private var content: some View {
         let cardShape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.card, style: .continuous)
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.l) {
-            LuckyScreenHeader(title: "运行日志", subtitle: "查看服务器的实时活动") {
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckyScreenHeader(title: "运行日志", subtitle: "实时活动与分级排查") {
                 LuckyToolbarButton(symbol: LuckySymbol.refresh, label: "刷新日志", loading: fetching) {
                     Task { await poll() }
                 }
@@ -109,7 +127,9 @@ struct LogsScreen: View {
                 LuckyErrorCard(message: failure) { Task { await poll() } }
             }
             VStack(spacing: 0) {
-                outputHeader.padding(LuckyTheme.Space.l)
+                outputHeader
+                    .padding(.horizontal, LuckyTheme.Space.m)
+                    .padding(.vertical, 8)
                 LuckyHairline()
                 output
             }
@@ -173,28 +193,26 @@ struct LogsScreen: View {
 
     private var outputHeader: some View {
         HStack(spacing: LuckyTheme.Space.s) {
-            VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
-                HStack(spacing: 6) {
-                    LuckyStatusDot(tone: statusTone, pulsing: pollActive && failure.isEmpty)
-                    Text("实时输出")
-                        .font(LuckyTheme.Text.bodyMedium)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                }
-                Text(paused ? "刷新已暂停 · \(countText)" : "每 3 秒刷新 · \(countText)")
-                    .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(LuckyTheme.textTertiary)
-                    .lineLimit(1)
-            }
+            LuckyStatusDot(tone: statusTone, pulsing: pollActive && failure.isEmpty, size: 7)
+            Text(paused ? "已暂停" : "实时 · 3s")
+                .font(LuckyTheme.Text.captionMedium)
+                .foregroundStyle(LuckyTheme.textPrimary)
+                .lineLimit(1)
+            Text("· \(countText)")
+                .font(LuckyTheme.Text.caption)
+                .foregroundStyle(LuckyTheme.textTertiary)
+                .monospacedDigit()
+                .lineLimit(1)
             Spacer(minLength: 0)
             Button {
                 LuckyHaptic.selection()
                 paused.toggle()
             } label: {
                 Label(paused ? "继续" : "暂停", systemImage: paused ? "play.fill" : "pause.fill")
-                    .font(LuckyTheme.Text.captionMedium)
+                    .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(LuckyTheme.accent)
-                    .padding(.horizontal, LuckyTheme.Space.m)
-                    .frame(minHeight: LuckyTheme.Space.touchTarget)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 30)
                     .background(LuckyTheme.accentSoft, in: .capsule)
             }
             .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
@@ -205,9 +223,9 @@ struct LogsScreen: View {
     private var filterBar: some View {
         HStack(spacing: LuckyTheme.Space.s) {
             Picker("日志级别", selection: $filter) {
-                Text(GlobalLogFilter.all.title).tag(GlobalLogFilter.all)
-                Text(GlobalLogFilter.warning.title).tag(GlobalLogFilter.warning)
-                Text(GlobalLogFilter.error.title).tag(GlobalLogFilter.error)
+                Text("\(GlobalLogFilter.all.title) \(lines.count)").tag(GlobalLogFilter.all)
+                Text("\(GlobalLogFilter.warning.title) \(warningCount)").tag(GlobalLogFilter.warning)
+                Text("\(GlobalLogFilter.error.title) \(errorCount)").tag(GlobalLogFilter.error)
             }
             .pickerStyle(.segmented)
             Menu {
@@ -219,7 +237,7 @@ struct LogsScreen: View {
                 Image(systemName: "ellipsis")
                     .font(LuckyTheme.Text.cardTitle)
                     .foregroundStyle(LuckyTheme.textSecondary)
-                    .frame(width: LuckyTheme.Space.touchTarget, height: LuckyTheme.Space.touchTarget)
+                    .frame(width: 34, height: 34)
                     .background(LuckyTheme.surface, in: .circle)
             }
             .accessibilityLabel("日志操作")
@@ -235,6 +253,8 @@ struct LogsScreen: View {
     private func clearDisplay() {
         lines.removeAll(keepingCapacity: true)
         cachedVisibleLines.removeAll(keepingCapacity: true)
+        warningCount = 0
+        errorCount = 0
         cleared = true
         toast = .note("已清空当前显示")
     }
@@ -276,12 +296,34 @@ struct LogsScreen: View {
         // and the user's text selection survives.
         if !batch.incremental, !restarted, lines == batch.lines { return }
 
+        let canIncrementallyAppend = batch.incremental && !restarted
+            && (lines.count + batch.lines.count <= Self.maxLogLines)
+        if canIncrementallyAppend {
+            lines.append(contentsOf: batch.lines)
+            let needle = query.jsTrimmed
+            for line in batch.lines {
+                switch LuckyLogSeverity.detect(line) {
+                case .warning: warningCount += 1
+                case .error: errorCount += 1
+                case .normal: break
+                }
+                if filter == .all && needle.isEmpty {
+                    cachedVisibleLines.append(line)
+                } else if matchesCurrentFilter(line, needle: needle) {
+                    cachedVisibleLines.append(line)
+                }
+            }
+            if !lines.isEmpty { cleared = false }
+            return
+        }
+
         var next = batch.incremental && !restarted ? lines : []
         next.append(contentsOf: batch.lines)
         if next.count > Self.maxLogLines {
             next.removeFirst(next.count - Self.maxLogLines)
         }
         lines = next
+        recomputeSeverityCounts()
         recomputeVisibleLines()
         if !next.isEmpty { cleared = false }
     }

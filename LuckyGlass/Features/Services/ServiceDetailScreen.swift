@@ -188,11 +188,12 @@ struct ServiceDetailScreen: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckyGlassSegmentedControl(
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckyHorizontalTabBar(
                 selection: modeSelection,
                 segments: [
-                    LuckySegment(Mode.list, "列表", symbol: "list.bullet"),
+                    LuckySegment(Mode.list, "列表", symbol: "list.bullet",
+                                 badge: loaded ? items.count : nil),
                     LuckySegment(Mode.logs, "日志", symbol: LuckySymbol.logs),
                 ]
             )
@@ -201,13 +202,15 @@ struct ServiceDetailScreen: View {
             // screen that has a single kind.
             if !actionFailure.isEmpty {
                 LuckyErrorCard(message: actionFailure)
+                    .padding(.horizontal, LuckyTheme.Space.gutter)
             }
             if !editorFailure.isEmpty {
                 LuckyErrorCard(message: editorFailure)
+                    .padding(.horizontal, LuckyTheme.Space.gutter)
             }
         }
-        .padding(.horizontal, LuckyTheme.Space.gutter)
-        .padding(.bottom, LuckyTheme.Space.m)
+        .padding(.top, LuckyTheme.Space.xs)
+        .padding(.bottom, LuckyTheme.Space.s)
     }
 
     @ViewBuilder
@@ -245,30 +248,54 @@ struct ServiceDetailScreen: View {
         return "\(logPage) / \(max(1, (total + size - 1) / size))"
     }
 
+    private struct ServiceRowEntry: Identifiable {
+        var id: String
+        var item: LuckyListItem
+        var index: Int
+    }
+
+    private var rowEntries: [ServiceRowEntry] {
+        var seen = Set<String>()
+        seen.reserveCapacity(items.count)
+        return items.enumerated().map { index, item in
+            let base = ServiceRecord.key(item, index)
+            var id = base
+            var suffix = 1
+            while !seen.insert(id).inserted {
+                id = "\(base)#\(suffix)"
+                suffix += 1
+            }
+            return ServiceRowEntry(id: id, item: item, index: index)
+        }
+    }
+
     private var listBranch: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: LuckyTheme.Space.stack) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 if !listFailure.isEmpty {
                     LuckyErrorCard(message: listFailure) { Task { await loadList() } }
                 }
                 if !loaded {
                     LuckySkeleton(rows: 4)
                 }
-                ForEach(items.indices, id: \.self) { index in
-                    row(items[index], index)
+                ForEach(rowEntries) { entry in
+                    row(entry.item, entry.index)
                 }
                 if loaded, listFailure.isEmpty, items.isEmpty {
                     LuckyEmptyState(symbol: LuckySymbol.kind(kind), title: "接口未返回列表数据")
                 }
             }
             .padding(.horizontal, LuckyTheme.Space.gutter)
-            .padding(.top, LuckyTheme.Space.pageTop)
+            .padding(.top, LuckyTheme.Space.s)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollIndicators(.hidden)
-        .refreshable { await loadList() }
+        .refreshable {
+            let work = Task { await loadList() }
+            await work.value
+        }
     }
 
     /// The log half. `LuckyLogView` scrolls internally, so this branch is a non-scrolling stack
@@ -326,88 +353,88 @@ struct ServiceDetailScreen: View {
 
     // MARK: - Rows
 
-    /// One `Panel` in the list. The original stacks up to six blocks and simply does not mount the
-    /// ones a kind has no use for, which is why each sits behind an `if` — an always-present but
-    /// empty container would still contribute the stack's spacing.
+    /// Compact card layout: inline enable toggle in the header and a single primary action row
+    /// with secondary/destructive verbs tucked into the trailing menu.
     @ViewBuilder
     private func row(_ item: LuckyListItem, _ index: Int) -> some View {
         let key = ServiceRecord.key(item, index)
         let name = ServiceRecord.displayName(item, kind: kind, index: index)
-        LuckyCard(spacing: LuckyTheme.Space.s) {
-            rowHeader(item, key: key, name: name)
-            if kind == .ddns || kind == .ssl {
-                enableRow(item, key: key)
+        LuckyCard(radius: 14, padding: 0, spacing: 0) {
+            VStack(alignment: .leading, spacing: 7) {
+                rowHeader(item, key: key, name: name)
+                if kind == .docker {
+                    dockerRow(key: key)
+                    ServiceActionButton(title: "查看日志", symbol: LuckySymbol.logs, fill: .plain,
+                                        height: 34) {
+                        showLogs(key: key)
+                    }
+                }
+                if kind == .ddns || kind == .ssl {
+                    LuckyHairline()
+                    compactVerbs(item, key: key, name: name)
+                }
+                if selectedKey == key {
+                    detailBlock()
+                }
             }
-            if kind == .docker {
-                dockerRow(key: key)
-            }
-            if kind == .ddns || kind == .ssl {
-                primaryVerbs(item, key: key, name: name)
-            }
-            if kind != .webservice {
-                secondaryVerbs(item, key: key, name: name)
-            }
-            if selectedKey == key {
-                detailBlock()
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
         }
     }
 
-    /// The tappable header. `onPress={() => setSelectedKey(expanded ? '' : key)}` — collapsing by
-    /// clearing the key is also what disables `detailQuery`, so one piece of state does both jobs.
+    /// The tappable header with inline enable toggle for DDNS / SSL so every card saves ~44pt.
     private func rowHeader(_ item: LuckyListItem, key: String, name: String) -> some View {
         let expanded = selectedKey == key
         let summary = ServiceRecord.rowDetail(item, kind: kind)
         let status = ServiceRecord.rowStatus(item)
-        return Button {
-            LuckyHaptic.light()
-            selectedKey = expanded ? "" : key
-            detail = nil
-            detailFailure = ""
-        } label: {
-            HStack(alignment: .top, spacing: LuckyTheme.Space.m) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(name)
-                        .font(LuckyTheme.Text.bodyMedium)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                        .lineLimit(2)
-                    if !summary.isEmpty {
-                        Text(summary)
-                            .font(LuckyTheme.Text.caption)
-                            .foregroundStyle(LuckyTheme.textSecondary)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: LuckyTheme.Space.s) {
-                    LuckyChip(text: status,
-                              tone: ServiceRecord.isHealthyStatus(status) ? .ok : .idle)
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(LuckyTheme.textTertiary)
-                        .frame(width: 24, height: 24)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(LuckyPressStyle(pressedScale: 0.985, pressedOpacity: 0.75))
-        .accessibilityLabel("\(name) \(status)")
-        .accessibilityHint(expanded ? "收起详情" : "展开详情")
-    }
-
-    /// The 启用 switch. `onValueChange` confirms before mutating, so the binding's setter never
-    /// writes: the toggle springs back and only the reloaded list moves it.
-    private func enableRow(_ item: LuckyListItem, key: String) -> some View {
         let on = ServiceRecord.isEnabled(item)
-        return Toggle(isOn: Binding(get: { on }, set: { confirmEnabled(key: key, enabled: $0) })) {
-            Text("启用")
-                .font(LuckyTheme.Text.label)
-                .foregroundStyle(LuckyTheme.textSecondary)
+        return HStack(alignment: .center, spacing: 8) {
+            Button {
+                LuckyHaptic.light()
+                selectedKey = expanded ? "" : key
+                detail = nil
+                detailFailure = ""
+            } label: {
+                HStack(alignment: .center, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(name)
+                                .font(.system(size: 13.5, weight: .bold))
+                                .foregroundStyle(LuckyTheme.textPrimary)
+                                .lineLimit(1)
+                            LuckyChip(text: status,
+                                      tone: ServiceRecord.isHealthyStatus(status) ? .ok : .idle)
+                        }
+                        if !summary.isEmpty {
+                            Text(summary)
+                                .font(.system(size: 11))
+                                .foregroundStyle(LuckyTheme.textSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .frame(width: 20, height: 20)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(LuckyPressStyle(pressedScale: 0.985, pressedOpacity: 0.75))
+            .accessibilityLabel("\(name) \(status)")
+            .accessibilityHint(expanded ? "收起详情" : "展开详情")
+
+            if kind == .ddns || kind == .ssl {
+                Toggle("", isOn: Binding(get: { on }, set: { confirmEnabled(key: key, enabled: $0) }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(LuckyTheme.success)
+                    .disabled(pending)
+                    .accessibilityLabel("启用 \(name)")
+            }
         }
-        .toggleStyle(.switch)
-        .tint(LuckyTheme.accent)
-        .disabled(pending)
     }
 
     /// The five Docker verbs. The original lays them out at `width: '31%'` with `flexWrap`, which
@@ -417,70 +444,54 @@ struct ServiceDetailScreen: View {
         LuckyTileGrid(minimum: 96, spacing: LuckyTheme.Space.s) {
             ForEach(Self.dockerVerbs) { verb in
                 ServiceActionButton(title: verb.label, symbol: verb.symbol, tone: .idle,
-                                    fill: .outline, height: 38, disabled: pending) {
+                                    fill: .outline, height: 34, disabled: pending) {
                     confirmAction(key: key, action: verb.id, label: verb.label)
                 }
             }
         }
     }
 
-    /// 同步/刷新 · 编辑 · 删除. SSL certificates that arrived from a sync source are re-pulled rather
-    /// than re-issued, which is the only difference between the two kinds' first button.
-    private func primaryVerbs(_ item: LuckyListItem, key: String, name: String) -> some View {
+    /// Single compact action bar: 同步/刷新 + 编辑 + `…` menu (复制/工具/日志/删除).
+    private func compactVerbs(_ item: LuckyListItem, key: String, name: String) -> some View {
         let source = ServiceRecord.pick(item, ["AddFrom", "Type"], "file")
         let syncSource = kind == .ssl && source.jsTrimmed.lowercased() == "sync"
         let action = kind == .ddns ? "sync" : (syncSource ? "sync" : "flush")
         let label = kind == .ddns ? "手动同步" : (syncSource ? "同步证书" : "刷新证书")
         let title = kind == .ddns ? "同步" : (syncSource ? "同步" : "刷新")
-        return Group {
-            if kind == .ddns {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 7) {
-                    ServiceActionButton(title: title, symbol: LuckySymbol.restart, fill: .solid,
-                                        disabled: pending) {
-                        confirmAction(key: key, action: action, label: label)
-                    }
-                    ServiceActionButton(title: "编辑", symbol: LuckySymbol.edit, fill: .muted,
-                                        disabled: pending) { openItemEditor(key: key) }
-                    ServiceActionButton(title: "复制", symbol: LuckySymbol.copy, fill: .muted,
-                                        disabled: pending) { copyDdnsTask(key: key) }
-                    ServiceActionButton(title: "删除", symbol: LuckySymbol.delete, tone: .danger,
-                                        fill: .soft, disabled: pending) {
-                        confirmRemove(key: key, name: name)
-                    }
+        return HStack(spacing: 6) {
+            ServiceActionButton(title: title, symbol: LuckySymbol.restart, fill: .solid,
+                                height: 34, radius: 9, disabled: pending) {
+                confirmAction(key: key, action: action, label: label)
+            }
+            ServiceActionButton(title: "编辑", symbol: LuckySymbol.edit, fill: .muted,
+                                height: 34, radius: 9, disabled: pending) {
+                openItemEditor(key: key)
+            }
+            Menu {
+                if kind == .ddns {
+                    Button("复制任务", systemImage: LuckySymbol.copy) { copyDdnsTask(key: key) }
+                        .disabled(pending)
                 }
-            } else {
-                HStack(spacing: 7) {
-                    ServiceActionButton(title: title, symbol: LuckySymbol.restart, fill: .solid,
-                                        disabled: pending) {
-                        confirmAction(key: key, action: action, label: label)
-                    }
-                    ServiceActionButton(title: "编辑", symbol: LuckySymbol.edit, fill: .muted,
-                                        disabled: pending) { openItemEditor(key: key) }
-                    ServiceActionButton(title: "删除", symbol: LuckySymbol.delete, tone: .danger,
-                                        fill: .soft, disabled: pending) {
-                        confirmRemove(key: key, name: name)
-                    }
+                Button(kind == .ddns ? "DNS 记录与工具" : "更多操作",
+                       systemImage: "wrench.and.screwdriver") {
+                    advanced = ServiceAdvancedRequest(key: key, name: name, item: item)
                 }
+                if kind == .ssl {
+                    Button("查看日志", systemImage: LuckySymbol.logs) { showLogs(key: key) }
+                }
+                Divider()
+                Button("删除", systemImage: LuckySymbol.delete, role: .destructive) {
+                    confirmRemove(key: key, name: name)
+                }
+                .disabled(pending)
+            } label: {
+                LuckyIconTile(symbol: "ellipsis", size: 34, glyph: 15, tone: .idle)
+                    .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 9))
             }
-        }
-    }
-
-    /// 更多操作 and 查看日志. Both are optional per kind and the original mounts them as two separate
-    /// siblings, so a kind that shows both gets two stacked rows rather than one split row.
-    @ViewBuilder
-    private func secondaryVerbs(_ item: LuckyListItem, key: String, name: String) -> some View {
-        if kind == .ddns || kind == .ssl {
-            ServiceActionButton(title: kind == .ddns ? "DNS 记录与工具" : "更多操作",
-                                symbol: "ellipsis", tone: .idle, fill: .muted,
-                                height: 38, radius: LuckyTheme.Radius.row) {
-                advanced = ServiceAdvancedRequest(key: key, name: name, item: item)
-            }
-        }
-        if kind == .docker || kind == .ssl {
-            ServiceActionButton(title: "查看日志", symbol: LuckySymbol.logs, fill: .plain,
-                                height: 38) {
-                showLogs(key: key)
-            }
+            .buttonStyle(.plain)
+            .disabled(pending)
+            .opacity(pending ? 0.45 : 1)
+            .accessibilityLabel("\(name) 的更多操作")
         }
     }
 

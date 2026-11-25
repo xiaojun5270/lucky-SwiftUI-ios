@@ -8,8 +8,11 @@ import SwiftUI
 /// divergence on a fast tab bounce and a harmless one.
 extension DockerScreen {
     /// Syncs cached lists & icons hydrated or warmed in the background into view state.
-    func syncListsFromCache() {
+    /// Guarded by O(1) revision checks so unchanged refreshes never cascade `@State` rebuilds.
+    func syncListsFromCache(force: Bool = false) {
         let cache = DockerStatsCache.shared
+        guard force || syncedDataRevision != cache.dataRevision else { return }
+        syncedDataRevision = cache.dataRevision
         if !cache.containers.isEmpty || cache.loadedQueries.contains(.containers) {
             containers = cache.containers
         }
@@ -28,20 +31,23 @@ extension DockerScreen {
         if !cache.volumes.isEmpty || cache.loadedQueries.contains(.volumes) {
             volumes = cache.volumes
         }
-        loaded.formUnion(cache.loadedQueries)
+        if !cache.loadedQueries.isSubset(of: loaded) {
+            loaded.formUnion(cache.loadedQueries)
+        }
     }
 
     /// Syncs off-main-thread pre-parsed telemetry without stalling scrolling.
-    func syncStatsFromCache() {
+    func syncStatsFromCache(force: Bool = false) {
         let cache = DockerStatsCache.shared
-        stats = cache.stats
-        liveStats = cache.liveStats
-        if !cache.statsByKey.isEmpty {
+        guard force || syncedStatsRevision != cache.statsRevision else { return }
+        syncedStatsRevision = cache.statsRevision
+        if !cache.statsByKey.isEmpty, statsByKey != cache.statsByKey {
             statsByKey = cache.statsByKey
         }
-        statsSucceeded = cache.statsSucceeded || !cache.statsByKey.isEmpty
-        statsFailed = cache.statsFailed
-        liveStatsFailure = cache.liveStatsFailure
+        let succeeded = cache.statsSucceeded || !cache.statsByKey.isEmpty
+        if statsSucceeded != succeeded { statsSucceeded = succeeded }
+        if statsFailed != cache.statsFailed { statsFailed = cache.statsFailed }
+        if liveStatsFailure != cache.liveStatsFailure { liveStatsFailure = cache.liveStatsFailure }
     }
 
     /// Entry-time load: serves disk-hydrated & background-warmed cache immediately with zero
@@ -60,7 +66,7 @@ extension DockerScreen {
                 await loadContainers(force: true)
             }
             if statsByKey.isEmpty {
-                await loadStats(force: false)
+                await loadStats(force: false, awaitLiveFallback: false)
             }
         case .settings:
             await loadSettings()
@@ -117,15 +123,20 @@ extension DockerScreen {
     }
 
     /// Refreshes containers & icons via `DockerStatsCache.shared` so results persist to disk.
-    private func loadContainers(force: Bool = false) async {
+    /// `quiet: true` during pull-to-refresh avoids toggling toolbar `fetching` while UIRefreshControl animates.
+    private func loadContainers(force: Bool = false, quiet: Bool = false) async {
         let hasCached = !containers.isEmpty
-        fetching = !hasCached
-        defer { if view == .containers { fetching = false } }
+        if !quiet && !hasCached { fetching = true }
+        defer { if !quiet && view == .containers && fetching { fetching = false } }
         do {
             _ = try await DockerStatsCache.shared.refreshContainers(force: force)
             syncListsFromCache()
-            queryFailures[.containers] = ""
-            loaded.insert(.containers)
+            if !(queryFailures[.containers] ?? "").isEmpty {
+                queryFailures[.containers] = ""
+            }
+            if !loaded.contains(.containers) {
+                loaded.insert(.containers)
+            }
         } catch {
             guard !error.isCancellation else { return }
             queryFailures[.containers] = error.luckyMessage()
@@ -201,10 +212,11 @@ extension DockerScreen {
 extension DockerScreen {
     /// Container stats are refreshed off the main actor through `DockerStatsCache.shared`, so
     /// manual refreshes and mutations stay single-flight, merged and persisted to disk.
-    private func loadStats(force: Bool = true) async {
-        statsLoading = statsByKey.isEmpty && !statsFailed
-        defer { statsLoading = false }
-        await DockerStatsCache.shared.refreshStats(force: force)
+    private func loadStats(force: Bool = true, awaitLiveFallback: Bool = false) async {
+        let showLoading = statsByKey.isEmpty && !statsFailed
+        if showLoading { statsLoading = true }
+        defer { if statsLoading { statsLoading = false } }
+        await DockerStatsCache.shared.refreshStats(force: force, awaitLiveFallback: awaitLiveFallback)
         syncStatsFromCache()
     }
 }
@@ -212,8 +224,15 @@ extension DockerScreen {
 // MARK: - 刷新与失效
 
 extension DockerScreen {
-    /// The toolbar button and pull-to-refresh. 容器 also refreshes its statistics sweep.
-    func refresh() async {
+    /// The toolbar button and pull-to-refresh. On 容器, containers and bulk stats fetch in parallel
+    /// without blocking UIRefreshControl on slow per-container fallback sweeps.
+    func refresh(fromPull: Bool = false) async {
+        if view == .containers, statsActive {
+            async let listTask: Void = loadContainers(force: true, quiet: fromPull)
+            async let statsTask: Void = loadStats(force: true, awaitLiveFallback: false)
+            _ = await (listTask, statsTask)
+            return
+        }
         await reloadActive(force: true)
         guard statsActive else { return }
         await refreshStats()
@@ -231,7 +250,7 @@ extension DockerScreen {
 
     /// Forces a background off-main-thread stats sweep and merges results into cache.
     func refreshStats() async {
-        await loadStats(force: true)
+        await loadStats(force: true, awaitLiveFallback: false)
     }
 
     /// §26's cascade. react-query refetches the mounted queries and marks the rest stale; every

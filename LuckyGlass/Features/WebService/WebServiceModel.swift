@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// `ViewKey` — the six panes of the screen's `ResponsiveTabBar`.
 ///
@@ -423,6 +424,175 @@ extension WebAction {
         case .settings: [.settings]
         // A template request only ever produces output; nothing on the server changed.
         case .template: []
+        }
+    }
+}
+
+// MARK: - 持久化缓存
+
+private struct WebPersistedSnapshot: Codable, Sendable {
+    var rulesJSON: String
+    var groupsJSON: String
+    var cgiJSON: String
+    var savedAt: TimeInterval
+}
+
+private struct WebHydratedPayload: Sendable {
+    var rules: [LuckyListItem]
+    var groups: [LuckyListItem]
+    var cgiItems: [LuckyListItem]
+}
+
+/// Account-scoped persistent cache shared by Dashboard's reverse-proxy summary and WebServiceScreen
+/// so neither screen flashes `--` or stalls on cold launch.
+@MainActor
+@Observable
+final class WebRulesCache {
+    static let shared = WebRulesCache()
+
+    private(set) var rules: [LuckyListItem] = []
+    private(set) var groups: [LuckyListItem] = []
+    private(set) var cgiItems: [LuckyListItem] = []
+    private(set) var loadedPanes: Set<WebPane> = []
+    private(set) var revision: UInt64 = 0
+
+    private var activeAccountKey = ""
+    private var activeGeneration: UInt64 = 0
+    private var hydratedAccountKey = ""
+    private var lastUpdated: [WebPane: Date] = [:]
+    private var diskSaveTask: Task<Void, Never>?
+
+    private init() {}
+
+    var enabledRuleCount: Int {
+        rules.reduce(into: 0) { count, item in
+            let raw = item["Enable"] ?? item["enable"]
+            if let raw, !raw.isNull {
+                if Format.asEnabled(raw, fallback: true) { count += 1 }
+            } else {
+                count += 1
+            }
+        }
+    }
+
+    private static func cacheFileURL(for key: String) -> URL? {
+        guard !key.isEmpty else { return nil }
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return root
+            .appendingPathComponent("LuckyWebCache", isDirectory: true)
+            .appendingPathComponent("\(key).json")
+    }
+
+    func activate(credentials: LuckyCredentials) {
+        let key = DockerStatsCache.accountKey(baseUrl: credentials.baseUrl, account: credentials.account)
+        guard key != activeAccountKey || credentials.generation != activeGeneration else { return }
+        diskSaveTask?.cancel()
+        diskSaveTask = nil
+        activeAccountKey = key
+        activeGeneration = credentials.generation
+        hydratedAccountKey = ""
+        resetMemory()
+    }
+
+    func isFresh(_ pane: WebPane, maxAge: TimeInterval = 30) -> Bool {
+        guard let stamp = lastUpdated[pane] else { return false }
+        return Date().timeIntervalSince(stamp) < maxAge
+    }
+
+    func clear() {
+        diskSaveTask?.cancel()
+        diskSaveTask = nil
+        hydratedAccountKey = ""
+        resetMemory()
+    }
+
+    private func resetMemory() {
+        rules = []
+        groups = []
+        cgiItems = []
+        loadedPanes = []
+        lastUpdated = [:]
+        revision &+= 1
+    }
+
+    func hydrateFromDiskIfNeeded(credentials: LuckyCredentials) async {
+        guard !credentials.baseUrl.isEmpty else { return }
+        activate(credentials: credentials)
+        let key = activeAccountKey
+        let generation = activeGeneration
+        guard hydratedAccountKey != key, let url = Self.cacheFileURL(for: key) else { return }
+        hydratedAccountKey = key
+
+        let payload: WebHydratedPayload? = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: url),
+                  let snapshot = try? JSONDecoder().decode(WebPersistedSnapshot.self, from: data) else {
+                return nil
+            }
+            return WebHydratedPayload(
+                rules: JSONParser.tryParse(snapshot.rulesJSON)?.arrayValue ?? [],
+                groups: JSONParser.tryParse(snapshot.groupsJSON)?.arrayValue ?? [],
+                cgiItems: JSONParser.tryParse(snapshot.cgiJSON)?.arrayValue ?? []
+            )
+        }.value
+
+        guard generation == activeGeneration, key == activeAccountKey, let payload else { return }
+        var changed = false
+        if rules.isEmpty, !payload.rules.isEmpty {
+            rules = payload.rules
+            loadedPanes.insert(.rules)
+            changed = true
+        }
+        if groups.isEmpty, !payload.groups.isEmpty {
+            groups = payload.groups
+            loadedPanes.insert(.groups)
+            changed = true
+        }
+        if cgiItems.isEmpty, !payload.cgiItems.isEmpty {
+            cgiItems = payload.cgiItems
+            loadedPanes.insert(.cgi)
+            changed = true
+        }
+        if changed { revision &+= 1 }
+    }
+
+    func store(_ pane: WebPane, items: [LuckyListItem]) {
+        loadedPanes.insert(pane)
+        lastUpdated[pane] = Date()
+        switch pane {
+        case .rules: rules = items
+        case .groups: groups = items
+        case .cgi: cgiItems = items
+        default: return
+        }
+        revision &+= 1
+        schedulePersist()
+    }
+
+    private func schedulePersist() {
+        let key = activeAccountKey
+        guard !key.isEmpty, let url = Self.cacheFileURL(for: key) else { return }
+        let rulesCopy = rules
+        let groupsCopy = groups
+        let cgiCopy = cgiItems
+
+        diskSaveTask?.cancel()
+        diskSaveTask = Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            await Task.detached(priority: .utility) {
+                let snapshot = WebPersistedSnapshot(
+                    rulesJSON: JSONSerializer.stringify(.array(rulesCopy)),
+                    groupsJSON: JSONSerializer.stringify(.array(groupsCopy)),
+                    cgiJSON: JSONSerializer.stringify(.array(cgiCopy)),
+                    savedAt: Date().timeIntervalSince1970
+                )
+                guard let encoded = try? JSONEncoder().encode(snapshot) else { return }
+                let folder = url.deletingLastPathComponent()
+                try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try? encoded.write(to: url, options: .atomic)
+            }.value
         }
     }
 }

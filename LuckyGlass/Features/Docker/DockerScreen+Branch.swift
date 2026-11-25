@@ -33,10 +33,11 @@ extension DockerScreen {
         DockerContainersView(
             items: filtered,
             icons: icons,
+            prebuiltRows: searchWord.isEmpty && !cache.prebuiltContainerRows.isEmpty ? cache.prebuiltContainerRows : nil,
             stats: containerStatsByKey,
             loading: loading,
             busy: pending,
-            refresh: { await refresh() },
+            refresh: { await refresh(fromPull: true) },
             actions: DockerContainerActions(
                 menu: { containerMenu = $0 },
                 unpause: { key in run(DockerMutation(.containerUnpause, key: key)) },

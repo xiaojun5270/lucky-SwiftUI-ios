@@ -10,11 +10,15 @@ struct WebSubRuleCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        LuckyCard(radius: LuckyTheme.Radius.panel, padding: LuckyTheme.Space.l,
-                  spacing: LuckyTheme.Space.m) {
-            header
-            addresses
-            actionRow
+        LuckyCard(radius: 14, padding: 0, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                header
+                addresses
+                    .opacity(entry.enabled ? 1 : 0.65)
+                actionRow
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
@@ -30,28 +34,25 @@ struct WebSubRuleCard: View {
 
     private var headerLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.s))
-            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.m))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.xs))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
     }
 
     private var header: some View {
         headerLayout {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(entry.name)
-                        .font(LuckyTheme.Text.cardTitle)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(entry.serviceType)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(serviceTone.tint)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(serviceTone.tint.opacity(0.12), in: .capsule)
-                }
-                Text(entry.enabled ? "已启用" : "已停用")
-                    .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(entry.enabled ? LuckyTheme.success : LuckyTheme.textTertiary)
+            HStack(spacing: 6) {
+                Text(entry.name)
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(entry.enabled ? LuckyTheme.textPrimary : LuckyTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(entry.serviceType)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(serviceTone.tint)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(serviceTone.tint.opacity(0.12), in: .capsule)
+                    .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
@@ -63,63 +64,65 @@ struct WebSubRuleCard: View {
                     actions.setSubEnabled(rule.id, entry.id, $0)
                 }
                 .tint(LuckyTheme.success)
+                .controlSize(.small)
                 .fixedSize()
-                .frame(minHeight: LuckyTheme.Space.touchTarget)
             }
         }
     }
 
     private var addresses: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+        VStack(alignment: .leading, spacing: 4) {
             // A lone domain already serves as the title when there is no remark.
             if !entry.remark.isEmpty || entry.domains.count != 1 {
-                topologyNode(symbol: "globe", label: "前端入口", lines: entry.domains, fallback: "未填写前端地址", tone: .brand)
+                topologyNode(symbol: "globe", label: "前端", lines: entry.domains, fallback: "未填写前端地址", tone: .brand)
             }
             if !entry.locations.isEmpty {
-                topologyNode(symbol: "server.rack", label: entry.serviceType == "反向代理" ? "后端目标" : "转发目标", lines: entry.locations, fallback: "", tone: .info)
+                topologyNode(symbol: "server.rack", label: entry.serviceType == "反向代理" ? "后端" : "目标", lines: entry.locations, fallback: "", tone: .info)
             }
         }
-        .padding(LuckyTheme.Space.m)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LuckyTheme.surfaceSunken, in: .rect(cornerRadius: LuckyTheme.Radius.row))
+        .background(LuckyTheme.surfaceSunken, in: .rect(cornerRadius: 9))
     }
 
     private func topologyNode(symbol: String, label: String, lines: [String], fallback: String, tone: LuckyTone) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 9.5, weight: .semibold))
                 .foregroundStyle(tone.tint)
-                .frame(width: 20, height: 20)
+                .frame(width: 16, height: 16)
                 .background(tone.tint.opacity(0.12), in: .circle)
                 .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(LuckyTheme.textTertiary)
-                Text(lines.isEmpty ? fallback : lines.joined(separator: "\n"))
-                    .font(LuckyTheme.Text.code)
-                    .foregroundStyle(LuckyTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(LuckyTheme.textTertiary)
+                .fixedSize()
+                .padding(.top, 1)
+            Text(lines.isEmpty ? fallback : lines.joined(separator: "\n"))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(LuckyTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     @ViewBuilder
     private var actionRow: some View {
         if dynamicTypeSize >= .xxLarge {
-            VStack(spacing: LuckyTheme.Space.s) {
+            VStack(spacing: 6) {
                 editButton
-                HStack(spacing: LuckyTheme.Space.s) { copyButton; moreMenu }
+                HStack(spacing: 6) { copyButton; moreMenu }
             }
         } else {
-            HStack(spacing: LuckyTheme.Space.s) { copyButton; editButton; moreMenu }
+            HStack(spacing: 6) { copyButton; editButton; moreMenu }
         }
     }
 
     private var editButton: some View {
-        WebRuleActionButton(title: "编辑", symbol: "pencil", selected: true, disabled: busy) {
+        WebRuleActionButton(title: "编辑", symbol: "pencil", selected: true,
+                            compact: true, disabled: busy) {
             actions.editSub(rule.id, entry.id)
         }
         .accessibilityLabel("编辑子规则 \(entry.name)")
@@ -127,7 +130,7 @@ struct WebSubRuleCard: View {
 
     private var copyButton: some View {
         WebRuleActionButton(title: "复制网址", symbol: LuckySymbol.copy,
-                            disabled: entry.domains.isEmpty) {
+                            compact: true, disabled: entry.domains.isEmpty) {
             actions.copyURL(rule.item, entry.item)
         }
         .accessibilityLabel("复制 \(entry.name) 的完整网址")
@@ -144,7 +147,7 @@ struct WebSubRuleCard: View {
                 actions.removeSub(rule.id, entry.id, entry.name)
             }
         } label: {
-            WebRuleActionLabel(symbol: "ellipsis", fills: false)
+            WebRuleActionLabel(symbol: "ellipsis", fills: false, compact: true)
         }
         .buttonStyle(.plain)
         .disabled(busy)
