@@ -206,9 +206,9 @@ struct ContainerStatsGrid: View, Equatable {
                               bytes(\.networkRx, \.hasNetworkRx))
         let upload = Metric("上传", LuckySymbol.upload, LuckyTheme.warning,
                             bytes(\.networkTx, \.hasNetworkTx))
-        let read = Metric("读取", "internaldrive.fill", LuckyTheme.textSecondary,
+        let read = Metric("读取", "tray.and.arrow.down.fill", LuckyTheme.textSecondary,
                           bytes(\.blockRead, \.hasBlockRead))
-        let write = Metric("写入", "internaldrive", LuckyTheme.textSecondary,
+        let write = Metric("写入", "tray.and.arrow.up.fill", LuckyTheme.textSecondary,
                            bytes(\.blockWrite, \.hasBlockWrite))
         return columnCount == 3
             ? [cpu, download, read, memory, upload, write]
@@ -241,7 +241,7 @@ struct ContainerStatsGrid: View, Equatable {
     private func cell(_ metric: Metric) -> some View {
         VStack(spacing: LuckyTheme.Space.s / 2) {
             HStack(spacing: LuckyTheme.Space.xs) {
-                Image(systemName: metric.symbol)
+                Image(systemName: LuckySymbol.solid(metric.symbol))
                     .font(LuckyTheme.Text.captionMedium)
                     .foregroundStyle(metric.tint)
                     .accessibilityHidden(true)
@@ -303,6 +303,8 @@ struct DockerIconButton: View {
     var disabled: Bool = false
     /// `fluid` — a button that shares the row's width rather than hugging its label.
     var fluid: Bool = false
+    /// `compact` — tighter icon/padding for 4-button rows so two-character labels never clip.
+    var compact: Bool = false
     var action: () -> Void
 
     var body: some View {
@@ -310,15 +312,17 @@ struct DockerIconButton: View {
             LuckyHaptic.light()
             action()
         } label: {
-            HStack(spacing: 5) {
-                LuckyFunctionIcon(symbol: symbol, size: 26, glyph: 12, color: tint)
+            HStack(spacing: compact ? 4 : 5) {
+                LuckyFunctionIcon(symbol: symbol, size: compact ? 18 : 26,
+                                  glyph: compact ? 11 : 12, color: tint)
                 Text(label)
                     .font(.system(size: 11, weight: .bold))
                     .lineLimit(1)
+                    .minimumScaleFactor(compact ? 0.82 : 1)
             }
             .foregroundStyle(LuckyTheme.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(minWidth: 64, minHeight: 42)
+            .padding(.horizontal, compact ? 6 : 10)
+            .frame(minWidth: compact ? 0 : 64, minHeight: 42)
             .frame(maxWidth: fluid ? .infinity : nil)
             .background(LuckyTheme.surfaceRaised,
                         in: .rect(cornerRadius: LuckyTheme.Radius.row))
@@ -376,6 +380,7 @@ struct ContainerCommandButton: View {
 /// The scroll used by settings and full-payload log views. List views use `DockerListPane` below.
 struct DockerPaneScroll<Content: View>: View {
     var spacing: CGFloat = LuckyTheme.Space.l
+    var topPadding: CGFloat = LuckyTheme.Space.s
     /// `<Page refreshing onRefresh>` — the scrollable page has pull to refresh just as the lists
     /// do, so 设置 and 日志's Mode A both get it here.
     var refresh: @Sendable () async -> Void
@@ -387,7 +392,7 @@ struct DockerPaneScroll<Content: View>: View {
                 content
             }
             .padding(.horizontal, LuckyTheme.Space.gutter)
-            .padding(.top, LuckyTheme.Space.pageTop)
+            .padding(.top, topPadding)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
             .frame(maxWidth: LuckyTheme.Layout.contentWidth)
             .frame(maxWidth: .infinity)
@@ -419,6 +424,7 @@ struct DockerListPane<Header: View, Rows: View>: View {
     var loadingText: String
     /// 12 px in the original. 日志 passes 0 — it has no separator.
     var spacing: CGFloat = LuckyTheme.Space.stack
+    var topPadding: CGFloat = LuckyTheme.Space.s
     var refresh: @Sendable () async -> Void
     @ViewBuilder var header: () -> Header
     @ViewBuilder var rows: () -> Rows
@@ -438,7 +444,7 @@ struct DockerListPane<Header: View, Rows: View>: View {
                 }
             }
             .padding(.horizontal, LuckyTheme.Space.gutter)
-            .padding(.top, LuckyTheme.Space.pageTop)
+            .padding(.top, topPadding)
             .padding(.bottom, LuckyTheme.Space.pageBottom)
             .frame(maxWidth: LuckyTheme.Layout.contentWidth)
             .frame(maxWidth: .infinity)

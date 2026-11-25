@@ -17,10 +17,6 @@ struct WebGroupsView: View {
 
     var body: some View {
         WebPaneScroll(refresh: refresh) {
-            LuckySectionHeader(title: WebPane.groups.title, symbol: WebPane.groups.symbol,
-                               iconRole: WebPane.groups.iconRole) {
-                LuckyChip(text: "\(items.count) 项", tone: .idle)
-            }
             if loading {
                 LuckyLoadingView(text: "正在读取分组")
             } else if items.isEmpty {

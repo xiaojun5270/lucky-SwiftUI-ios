@@ -14,6 +14,7 @@ struct LoginScreen: View {
     @State private var submitting = false
     @State private var seeded = false
     @State private var twoFAExpanded = false
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         ZStack {
@@ -24,7 +25,7 @@ struct LoginScreen: View {
                     card
                         .disabled(submitting)
                     loginButton
-                    Label("登录凭据安全保存在此设备的钥匙串中", systemImage: "lock.shield")
+                    Label("登录凭据安全保存在此设备的钥匙串中", systemImage: "lock.shield.fill")
                         .font(LuckyTheme.Text.caption)
                         .foregroundStyle(LuckyTheme.textSecondary)
                         .frame(maxWidth: .infinity)
@@ -119,7 +120,10 @@ struct LoginScreen: View {
     }
 
     private var loginButton: some View {
-        Button(action: submit) {
+        Button {
+            LuckyHaptic.medium()
+            submit()
+        } label: {
             HStack(spacing: LuckyTheme.Space.s) {
                 if submitting { ProgressView().tint(LuckyTheme.textOnAccent) }
                 Text(submitting ? "正在连接…" : "连接服务器")
@@ -130,7 +134,7 @@ struct LoginScreen: View {
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(LuckyTheme.accent, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.78))
         .disabled(submitting)
     }
 
@@ -156,13 +160,35 @@ struct LoginScreen: View {
                 contentType: contentType,
                 submitLabel: field == .twoFACode || (field == .password && !twoFAExpanded) ? .go : .next,
                 tone: errors[field] == nil ? nil : .danger,
-                onSubmit: field == .twoFACode || (field == .password && !twoFAExpanded) ? submit : nil
+                onSubmit: { handleSubmit(from: field) }
             )
+            .focused($focusedField, equals: field)
             if let message = errors[field] {
                 Text(message)
                     .font(LuckyTheme.Text.caption)
                     .foregroundStyle(LuckyTheme.danger)
             }
+        }
+    }
+
+    private func handleSubmit(from current: Field) {
+        switch current {
+        case .baseUrl:
+            focusedField = .remark
+        case .remark:
+            focusedField = .account
+        case .account:
+            focusedField = .password
+        case .password:
+            if twoFAExpanded {
+                focusedField = .twoFACode
+            } else {
+                focusedField = nil
+                submit()
+            }
+        case .twoFACode:
+            focusedField = nil
+            submit()
         }
     }
 

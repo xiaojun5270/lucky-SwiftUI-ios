@@ -106,12 +106,6 @@ struct WebSubRuleCard: View {
         }
     }
 
-    private var addressLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.xs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: LuckyTheme.Space.s))
-    }
-
     @ViewBuilder
     private var actionRow: some View {
         if dynamicTypeSize >= .xxLarge {

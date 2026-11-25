@@ -148,16 +148,34 @@ private struct DashboardHostPanel: View {
                         .foregroundStyle(LuckyTheme.textSecondary)
                 }
                 Spacer(minLength: 0)
-                LuckyChip(text: connected ? "在线" : "连接中",
-                          tone: connected ? .ok : .warning,
-                          symbol: connected ? "checkmark" : "arrow.clockwise")
+                HStack(spacing: 5) {
+                    LuckyStatusDot(tone: connected ? .ok : .warning, pulsing: connected, size: 7)
+                    Text(connected ? "在线" : "连接中")
+                        .font(LuckyTheme.Text.captionMedium)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(connected ? LuckyTheme.success : LuckyTheme.warning)
+                .padding(.horizontal, LuckyTheme.Space.s)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(connected ? LuckyTheme.successSoft : LuckyTheme.warningSoft)
+                )
             }
             .padding(DashboardLayout.cardInset)
 
             resourceLayout {
-                LuckyLoadGauge(label: "系统 CPU", value: status?.usedCpu)
+                LuckyLoadGauge(
+                    label: "系统 CPU",
+                    value: status?.usedCpu,
+                    detail: status.map { "空闲 " + JSCompat.toFixed(max(0, 100 - $0.usedCpu), 1) + "%" }
+                )
                 if !dynamicTypeSize.isAccessibilitySize { gaugeDivider }
-                LuckyLoadGauge(label: "系统内存", value: status == nil ? nil : memory)
+                LuckyLoadGauge(
+                    label: "系统内存",
+                    value: status == nil ? nil : memory,
+                    detail: status.map { "\(Format.bytes($0.usedMem)) / \(Format.bytes($0.totalMem))" }
+                )
             }
             .padding(.horizontal, LuckyTheme.Space.l)
             .padding(.vertical, LuckyTheme.Space.s)
@@ -399,7 +417,7 @@ private struct ReverseProxyCard: View {
         }
         .frame(minHeight: 56)
         .background(ConcentricRectangle().fill(LuckyTheme.surfaceRaised))
-        .clipShape(.rect(cornerRadius: LuckyTheme.Radius.panel))
+        .clipShape(ConcentricRectangle())
     }
 
     private func statColumn(_ label: String, _ value: String, tint: Color,
@@ -440,31 +458,42 @@ private struct ReverseProxyCard: View {
         let port = webRuleText(rule, ["ListenPort"], "--")
         let visiblePort = portsMasked && port != "--" ? "••••" : port
         let tls = webRuleFlag(rule, ["EnableTLS", "enableTLS", "TLS"], fallback: false)
-        return HStack(spacing: 9) {
-            LuckyIconTile(symbol: tls ? "lock.fill" : "arrow.triangle.branch", size: 28,
-                          glyph: 14, role: tls ? .security : .web)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name)
-                    .font(LuckyTheme.Text.captionMedium)
-                    .foregroundStyle(LuckyTheme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text("\(network) · \(host):\(visiblePort)")
+        return Button {
+            LuckyHaptic.light()
+            open()
+        } label: {
+            HStack(spacing: 9) {
+                LuckyIconTile(symbol: tls ? "lock.fill" : "arrow.triangle.branch", size: 28,
+                              glyph: 14, role: tls ? .security : .web)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(LuckyTheme.Text.captionMedium)
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("\(network) · \(host):\(visiblePort)")
+                        .font(LuckyTheme.Text.caption)
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(webSubRules(rule).count) 个子规则")
                     .font(LuckyTheme.Text.caption)
                     .foregroundStyle(LuckyTheme.textTertiary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LuckyTheme.textTertiary)
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text("\(webSubRules(rule).count) 个子规则")
-                .font(LuckyTheme.Text.caption)
-                .foregroundStyle(LuckyTheme.textTertiary)
-                .lineLimit(1)
+            .padding(10)
+            .frame(minHeight: 44)
+            .background(LuckyTheme.surfaceRaised,
+                        in: .rect(cornerRadius: LuckyTheme.Radius.row))
+            .contentShape(RoundedRectangle(cornerRadius: LuckyTheme.Radius.row, style: .continuous))
         }
-        .padding(10)
-        .frame(minHeight: 44)
-        .background(LuckyTheme.surfaceRaised,
-                    in: .rect(cornerRadius: LuckyTheme.Radius.row))
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.985, pressedOpacity: 0.72))
         .accessibilityElement(children: .combine)
     }
 }
@@ -479,7 +508,12 @@ struct DashboardAccountPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var session = LuckySession.shared
     @State private var showingAddAccount = false
-    @State private var switching = false
+    @State private var switchingID: String?
+    @State private var editingProfile: LuckyAccountProfile?
+    @State private var remarkDraft = ""
+    @State private var deletingProfile: LuckyAccountProfile?
+
+    private var switching: Bool { switchingID != nil }
 
     var body: some View {
         NavigationStack {
@@ -487,6 +521,33 @@ struct DashboardAccountPicker: View {
                 Section("已保存的账号") {
                     ForEach(session.profiles) { profile in
                         accountRow(profile)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    deletingProfile = profile
+                                } label: {
+                                    Label("删除", systemImage: LuckySymbol.delete)
+                                }
+                                Button {
+                                    remarkDraft = profile.remark
+                                    editingProfile = profile
+                                } label: {
+                                    Label("备注", systemImage: "pencil")
+                                }
+                                .tint(LuckyTheme.accent)
+                            }
+                            .contextMenu {
+                                Button {
+                                    remarkDraft = profile.remark
+                                    editingProfile = profile
+                                } label: {
+                                    Label("修改备注", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    deletingProfile = profile
+                                } label: {
+                                    Label("删除账号", systemImage: LuckySymbol.delete)
+                                }
+                            }
                     }
                 }
                 Section {
@@ -513,40 +574,81 @@ struct DashboardAccountPicker: View {
                     LoginScreen(addAccount: true)
                 }
             }
+            .alert("修改备注", isPresented: editingBinding, presenting: editingProfile) { target in
+                TextField("输入备注（留空清除）", text: $remarkDraft)
+                Button("取消", role: .cancel) { editingProfile = nil }
+                Button("保存") {
+                    session.updateRemark(remarkDraft, for: target.id)
+                    editingProfile = nil
+                }
+            } message: { target in
+                Text("\(target.account) · \(accountServerName(target.baseUrl))")
+            }
+            .alert("删除已保存账号", isPresented: deletingBinding, presenting: deletingProfile) { target in
+                Button("取消", role: .cancel) { deletingProfile = nil }
+                Button("删除", role: .destructive) {
+                    let targetID = target.id
+                    deletingProfile = nil
+                    Task { @MainActor in
+                        await session.removeProfile(id: targetID)
+                        if session.profiles.isEmpty { dismiss() }
+                    }
+                }
+            } message: { target in
+                Text("确定从设备钥匙串移除“\(target.displayName)”吗？")
+            }
         }
         .interactiveDismissDisabled(switching)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
+    private var editingBinding: Binding<Bool> {
+        Binding(get: { editingProfile != nil }, set: { if !$0 { editingProfile = nil } })
+    }
+
+    private var deletingBinding: Binding<Bool> {
+        Binding(get: { deletingProfile != nil }, set: { if !$0 { deletingProfile = nil } })
+    }
+
     private func accountRow(_ profile: LuckyAccountProfile) -> some View {
         let isCurrent = profile.id == session.activeProfileID
+        let isSwitching = switchingID == profile.id
         return Button {
             guard !switching else { return }
             guard !isCurrent else { dismiss(); return }
-            switching = true
+            LuckyHaptic.selection()
+            switchingID = profile.id
             Task { @MainActor in
                 await session.switchTo(profileID: profile.id)
-                switching = false
+                switchingID = nil
                 dismiss()
             }
         } label: {
             HStack(spacing: LuckyTheme.Space.m) {
-                VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
+                LuckyIconTile(symbol: "person.crop.circle", size: 34, glyph: 16,
+                              role: isCurrent ? .docker : .account)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(profile.displayName)
                         .font(LuckyTheme.Text.bodyMedium)
                         .foregroundStyle(LuckyTheme.textPrimary)
-                    Text(profile.account)
-                        .font(LuckyTheme.Text.caption)
-                        .foregroundStyle(LuckyTheme.textSecondary)
-                    Text(accountServerName(profile.baseUrl))
-                        .font(LuckyTheme.Text.caption)
-                        .foregroundStyle(LuckyTheme.textSecondary)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(profile.account)
+                        Text("·")
+                        Text(accountServerName(profile.baseUrl))
+                    }
+                    .font(LuckyTheme.Text.caption)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .lineLimit(1)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: LuckyTheme.Space.s)
-                if isCurrent {
+                if isSwitching {
+                    ProgressView().controlSize(.small)
+                } else if isCurrent {
                     Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(LuckyTheme.accent)
                         .accessibilityHidden(true)
                 }
@@ -585,12 +687,19 @@ struct DashboardScreen: View {
         LuckyPage(spacing: DashboardLayout.cardGap, refresh: { await refreshAll() }) {
             LuckyScreenHeader(title: "总览", subtitle: accountDisplayName,
                               subtitleAction: { showingAccounts = true }) {
-                Button { navigator.selection = .settings } label: {
+                Button {
+                    LuckyHaptic.light()
+                    navigator.selection = .settings
+                } label: {
                     LuckyMark(size: 46)
                         .frame(width: 52, height: 52)
                         .background(LuckyTheme.surface, in: .circle)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(LuckyTheme.hairline.opacity(0.4), lineWidth: LuckyTheme.strokeWidth)
+                        )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LuckyPressStyle(pressedScale: 0.92, pressedOpacity: 0.75))
                 .accessibilityLabel("账户与设置")
             }
             DashboardLiveReader { statusStore in
@@ -720,16 +829,26 @@ struct DashboardScreen: View {
     /// on a JavaScript number is `JSONSerializer.numberString`, which is why these stay `Double`s
     /// instead of being rounded to `Int` for display.
     private func serverPanel(_ status: LuckyLiveStatus) -> some View {
-        LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
+        let metricsLayout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s))
+            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
+        return LuckyCard(padding: DashboardLayout.cardInset, spacing: DashboardLayout.contentGap) {
             DashboardSectionHeader(title: "服务器信息", symbol: LuckySymbol.disk, iconRole: .server)
             LuckyHairline()
-            LuckyTileGrid(minimum: 135, spacing: LuckyTheme.Space.s) {
-                serverFact("进程启动", status.runTime.isEmpty ? "--" : status.runTime)
-                serverFact("查询时间", status.queryTime.isEmpty ? "--" : status.queryTime)
+            metricsLayout {
                 serverFact("打开句柄", JSONSerializer.numberString(status.handleCount))
                 serverFact("GC 次数", JSONSerializer.numberString(status.numGc))
                 serverFact("堆内存", Format.bytes(status.heapInuse))
             }
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                LuckyRow("进程启动", status.runTime.isEmpty ? "--" : status.runTime, mono: true, lineLimit: 1)
+                LuckyHairline()
+                LuckyRow("查询时间", status.queryTime.isEmpty ? "--" : status.queryTime, mono: true, lineLimit: 1)
+            }
+            .padding(LuckyTheme.Space.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LuckyTheme.surfaceRaised,
+                        in: .rect(cornerRadius: LuckyTheme.Radius.row))
         }
     }
 
@@ -738,6 +857,7 @@ struct DashboardScreen: View {
             Text(label)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(LuckyTheme.textTertiary)
+                .lineLimit(1)
             Text(value)
                 .font(LuckyTheme.Text.captionMedium)
                 .foregroundStyle(LuckyTheme.textPrimary)

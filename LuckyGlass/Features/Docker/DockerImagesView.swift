@@ -56,7 +56,8 @@ struct DockerImagesView: View {
         DockerListPane(count: entries.count, loading: loading,
                        empty: DockerView.images.emptyMessage,
                        symbol: DockerView.images.symbol,
-                       loadingText: "正在读取镜像", refresh: refresh) {
+                       loadingText: "正在读取镜像",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
             header
         } rows: {
             ForEach(entries) { entry in
@@ -73,18 +74,13 @@ extension DockerImagesView {
     /// left here is 构建 on its own line, the advanced-tools door, and the two batch switches.
     private var header: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-            LuckySectionHeader(title: DockerView.images.title,
-                               symbol: DockerView.images.symbol,
-                               iconRole: DockerView.images.iconRole) {
-                DockerCountChip(count: entries.count)
-            }
             HStack(spacing: LuckyTheme.Space.s) {
                 ServiceActionButton(title: "构建", symbol: "hammer", fill: .solid,
-                                    height: 44, radius: LuckyTheme.Radius.row, glyph: 15) {
+                                    height: 42, radius: LuckyTheme.Radius.row, glyph: 15) {
                     actions.build()
                 }
                 ServiceActionButton(title: "高级工具", symbol: "wrench.and.screwdriver",
-                                    fill: .card, height: 44,
+                                    fill: .card, height: 42,
                                     radius: LuckyTheme.Radius.row,
                                     name: "打开镜像高级工具", glyph: 15) {
                     actions.tools()
@@ -96,6 +92,7 @@ extension DockerImagesView {
             }
             if batch.mode { panel }
         }
+        .padding(.bottom, LuckyTheme.Space.xs)
     }
 
     /// 升级状态 with nothing selected, 检测所选 with a selection, 处理中 while either runs.
@@ -226,14 +223,18 @@ private struct DockerImageCard: View {
     private var selected: Bool { batch.selected.contains(entry.id) }
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            heading
-            // In selection mode the row is a checkbox and nothing else — the four verbs would all
-            // act on a single image while the user is choosing many.
-            if !batch.mode {
-                LuckyHairline()
-                verbs
+        LuckyCard(padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+                heading
+                // In selection mode the row is a checkbox and nothing else — the four verbs would all
+                // act on a single image while the user is choosing many.
+                if !batch.mode {
+                    LuckyHairline()
+                    verbs
+                }
             }
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 
@@ -267,6 +268,7 @@ private struct DockerImageCard: View {
     /// exists to delete with, and the original says so in the checkbox itself.
     private var checkbox: some View {
         Button {
+            LuckyHaptic.selection()
             actions.toggle(entry.id)
         } label: {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -287,7 +289,7 @@ private struct DockerImageCard: View {
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.9, pressedOpacity: 0.7))
         .disabled(batch.actionBusy)
         .opacity(batch.actionBusy ? 0.45 : 1)
         .accessibilityLabel("选择镜像 \(name)")

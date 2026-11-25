@@ -13,12 +13,9 @@ struct DockerTasksView: View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.tasks.emptyMessage,
                        symbol: DockerView.tasks.symbol,
-                       loadingText: "正在读取后台任务", refresh: refresh) {
-            // 清空任务 is the glass bar's, and it is the only thing this header ever held.
-            LuckySectionHeader(title: DockerView.tasks.title, symbol: DockerView.tasks.symbol,
-                               iconRole: DockerView.tasks.iconRole) {
-                DockerCountChip(count: items.count)
-            }
+                       loadingText: "正在读取后台任务",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+            EmptyView()
         } rows: {
             ForEach(items.indices, id: \.self) { index in
                 let item = items[index]
@@ -50,32 +47,41 @@ private struct DockerTaskCard: View {
     }
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            HStack(spacing: 9) {
-                LuckyIconTile(symbol: DockerView.tasks.symbol, size: 36, glyph: 18,
-                              role: DockerView.tasks.iconRole)
-                VStack(alignment: .leading, spacing: LuckyTheme.Space.hair) {
-                    Text(title)
-                        .font(LuckyTheme.Text.cardTitle)
-                        .foregroundStyle(LuckyTheme.textPrimary)
-                        .lineLimit(2)
-                    Text(status)
-                        .font(.system(size: 11))
-                        .foregroundStyle(LuckyTheme.textSecondary)
-                        .lineLimit(2)
+        LuckyCard(padding: 0) {
+            VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
+                HStack(spacing: LuckyTheme.Space.s + 2) {
+                    LuckyIconTile(symbol: DockerView.tasks.symbol, size: 36, glyph: 18,
+                                  role: DockerView.tasks.iconRole)
+                    VStack(alignment: .leading, spacing: LuckyTheme.Space.hair) {
+                        Text(title)
+                            .font(LuckyTheme.Text.cardTitle)
+                            .foregroundStyle(LuckyTheme.textPrimary)
+                            .lineLimit(2)
+                        if !status.isEmpty {
+                            Text(status)
+                                .font(.system(size: 11))
+                                .foregroundStyle(LuckyTheme.textSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                DockerIconButton(symbol: LuckySymbol.search, label: "详情",
-                                 tint: LuckyTheme.textPrimary, disabled: busy) {
-                    inspect(key)
-                }
-                // The one delete in the whole screen that does not confirm: a task record is a log
-                // line, and removing it destroys nothing the daemon still holds.
-                DockerIconButton(symbol: LuckySymbol.delete, label: "删除",
-                                 tint: LuckyTheme.danger, disabled: busy) {
-                    remove(key)
+                LuckyHairline()
+                HStack(spacing: LuckyTheme.Space.s) {
+                    DockerIconButton(symbol: LuckySymbol.search, label: "详情",
+                                     tint: LuckyTheme.textPrimary, disabled: busy, fluid: true) {
+                        inspect(key)
+                    }
+                    // The one delete in the whole screen that does not confirm: a task record is a log
+                    // line, and removing it destroys nothing the daemon still holds.
+                    DockerIconButton(symbol: LuckySymbol.delete, label: "删除",
+                                     tint: LuckyTheme.danger, disabled: busy, fluid: true) {
+                        remove(key)
+                    }
                 }
             }
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 }

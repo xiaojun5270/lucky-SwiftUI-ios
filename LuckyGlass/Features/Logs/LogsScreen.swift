@@ -31,8 +31,10 @@ struct LogsScreen: View {
 
     @Environment(\.luckyNavigator) private var navigator
     @Environment(\.scenePhase) private var phase
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var lines: [String] = []
+    @State private var cachedVisibleLines: [String] = []
     @State private var cursor = ""
     @State private var startTime = ""
     @State private var failure = ""
@@ -48,9 +50,15 @@ struct LogsScreen: View {
     private var active: Bool { navigator.selection == .logs && phase == .active }
     private var pollActive: Bool { active && !paused }
 
-    private var visibleLines: [String] {
+    private var visibleLines: [String] { cachedVisibleLines }
+
+    private func recomputeVisibleLines() {
         let needle = query.jsTrimmed
-        return lines.filter { line in
+        if filter == .all, needle.isEmpty {
+            cachedVisibleLines = lines
+            return
+        }
+        cachedVisibleLines = lines.filter { line in
             filter.includes(line)
                 && (needle.isEmpty || line.range(of: needle, options: .caseInsensitive) != nil)
         }
@@ -81,11 +89,14 @@ struct LogsScreen: View {
                 try? await Task.sleep(for: .seconds(3))
             }
         }
+        .onChange(of: query) { recomputeVisibleLines() }
+        .onChange(of: filter) { recomputeVisibleLines() }
     }
 
     /// `scrollable={false}`: the page does not scroll, the list inside it does.
     @ViewBuilder
     private var content: some View {
+        let cardShape = RoundedRectangle(cornerRadius: LuckyTheme.Radius.card, style: .continuous)
         VStack(alignment: .leading, spacing: LuckyTheme.Space.l) {
             LuckyScreenHeader(title: "运行日志", subtitle: "查看服务器的实时活动") {
                 LuckyToolbarButton(symbol: LuckySymbol.refresh, label: "刷新日志", loading: fetching) {
@@ -103,8 +114,22 @@ struct LogsScreen: View {
                 output
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(LuckyTheme.surface)
-            .clipShape(.rect(cornerRadius: LuckyTheme.Radius.card))
+            .background(cardShape.fill(LuckyTheme.surface))
+            .clipShape(cardShape)
+            .overlay(
+                cardShape.strokeBorder(
+                    LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.45 : 0.35),
+                    lineWidth: LuckyTheme.strokeWidth
+                )
+            )
+            .compositingGroup()
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.035),
+                radius: colorScheme == .dark ? 12 : 8,
+                x: 0,
+                y: colorScheme == .dark ? 5 : 3
+            )
+            .containerShape(cardShape)
         }
         .padding(.horizontal, LuckyTheme.Space.gutter)
         .padding(.top, LuckyTheme.Space.pageTop)
@@ -150,7 +175,7 @@ struct LogsScreen: View {
         HStack(spacing: LuckyTheme.Space.s) {
             VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                 HStack(spacing: 6) {
-                    LuckyStatusDot(tone: statusTone)
+                    LuckyStatusDot(tone: statusTone, pulsing: pollActive && failure.isEmpty)
                     Text("实时输出")
                         .font(LuckyTheme.Text.bodyMedium)
                         .foregroundStyle(LuckyTheme.textPrimary)
@@ -162,6 +187,7 @@ struct LogsScreen: View {
             }
             Spacer(minLength: 0)
             Button {
+                LuckyHaptic.selection()
                 paused.toggle()
             } label: {
                 Label(paused ? "继续" : "暂停", systemImage: paused ? "play.fill" : "pause.fill")
@@ -171,7 +197,7 @@ struct LogsScreen: View {
                     .frame(minHeight: LuckyTheme.Space.touchTarget)
                     .background(LuckyTheme.accentSoft, in: .capsule)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
             .accessibilityLabel(paused ? "继续实时刷新" : "暂停实时刷新")
         }
     }
@@ -208,6 +234,7 @@ struct LogsScreen: View {
 
     private func clearDisplay() {
         lines.removeAll(keepingCapacity: true)
+        cachedVisibleLines.removeAll(keepingCapacity: true)
         cleared = true
         toast = .note("已清空当前显示")
     }
@@ -255,6 +282,7 @@ struct LogsScreen: View {
             next.removeFirst(next.count - Self.maxLogLines)
         }
         lines = next
+        recomputeVisibleLines()
         if !next.isEmpty { cleared = false }
     }
 }

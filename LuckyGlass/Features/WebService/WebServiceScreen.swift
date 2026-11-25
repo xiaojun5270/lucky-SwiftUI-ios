@@ -135,32 +135,45 @@ extension WebServiceScreen {
         }
     }
 
-    /// The six-tab `ResponsiveTabBar`, followed by the two `ErrorState`s — both of which can show
-    /// at once. The log pane's 模块日志 and 最近日志 buttons ride along here rather than in the list,
-    /// because a glass control may not sit inside scrolling content.
+    /// The horizontal one-tap pane bar, followed by log source switches and any error banners.
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            HStack(spacing: LuckyTheme.Space.s) {
-                LuckyGlassMenuPicker(
-                    title: "视图",
-                    selection: paneSelection,
-                    segments: WebPane.allCases.map {
-                        LuckySegment($0, $0.label, symbol: $0.symbol)
-                    },
-                    iconRole: pane.iconRole
-                )
-                Spacer(minLength: 0)
-                if pane == .logs { logSourceButtons }
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckyHorizontalTabBar(
+                selection: paneSelection,
+                segments: WebPane.allCases.map { item in
+                    LuckySegment(item, item.label, symbol: item.symbol, badge: badgeCount(for: item))
+                }
+            )
+            if pane == .logs && (logTarget.kind != .module || logTarget.kind.supportsRecent) {
+                HStack(spacing: LuckyTheme.Space.s) {
+                    logSourceButtons
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, LuckyTheme.Space.gutter)
             }
-            if !localFailure.isEmpty {
-                LuckyErrorCard(message: localFailure)
-            }
-            if let failure = paneFailures[pane], !failure.isEmpty {
-                LuckyErrorCard(message: failure) { Task { await refresh() } }
+            if !localFailure.isEmpty || !(paneFailures[pane] ?? "").isEmpty {
+                VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                    if !localFailure.isEmpty {
+                        LuckyErrorCard(message: localFailure)
+                    }
+                    if let failure = paneFailures[pane], !failure.isEmpty {
+                        LuckyErrorCard(message: failure) { Task { await refresh() } }
+                    }
+                }
+                .padding(.horizontal, LuckyTheme.Space.gutter)
             }
         }
-        .padding(.horizontal, LuckyTheme.Space.gutter)
-        .padding(.bottom, LuckyTheme.Space.m)
+        .padding(.top, LuckyTheme.Space.xs)
+        .padding(.bottom, LuckyTheme.Space.s)
+    }
+
+    private func badgeCount(for item: WebPane) -> Int? {
+        switch item {
+        case .rules: return loaded.contains(.rules) ? rules.count : nil
+        case .groups: return loaded.contains(.groups) ? groups.count : nil
+        case .cgi: return loaded.contains(.cgi) ? cgiItems.count : nil
+        case .settings, .logs, .tools: return nil
+        }
     }
 
     /// §9's `setView`. Leaving a pane clears `localError`; arriving at 日志 also drops the tools

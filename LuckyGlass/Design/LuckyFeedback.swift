@@ -168,7 +168,9 @@ private struct LuckyToastModifier: ViewModifier {
                 if let current = toast {
                     LuckyGlassBadge(text: current.text,
                                     symbol: current.symbol ?? current.tone.symbol,
-                                    tone: current.tone)
+                                    tone: current.tone,
+                                    multiline: true)
+                        .padding(.horizontal, LuckyTheme.Space.gutter)
                         .padding(.top, LuckyTheme.Space.s)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .task(id: current.id) {

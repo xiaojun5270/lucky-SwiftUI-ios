@@ -134,7 +134,7 @@ extension DockerScreen {
                 openEditor(.imagePush, title: "推送镜像",
                            value: .object(DockerRecord.imagePushValue(menu.name)), key: menu.key)
             },
-            DockerActionItem("删除镜像", LuckySymbol.delete, LuckyTheme.danger) {
+            DockerActionItem("删除镜像", LuckySymbol.delete, LuckyTheme.danger, destructive: true) {
                 danger("确认删除", "删除镜像 \(menu.name)？") {
                     run(DockerMutation(.imageRemove, key: menu.deleteKey))
                 }
@@ -163,7 +163,8 @@ extension DockerScreen {
         // The one conditional entry: 恢复 lives on the row, so the drawer only ever pauses, and only
         // a container that is running and not already paused can be.
         if menu.running, !menu.paused {
-            items.append(DockerActionItem("暂停容器", "pause.fill", LuckyTheme.warning) {
+            items.append(DockerActionItem("暂停容器", "pause.fill", LuckyTheme.warning,
+                                          section: "状态与诊断") {
                 run(DockerMutation(.containerPause, key: menu.key))
             })
         }
@@ -176,11 +177,13 @@ extension DockerScreen {
     /// Entries 1–2: the inspect payload, and the log dump.
     private func containerReadItems(_ menu: DockerContainerMenu) -> [DockerActionItem] {
         [
-            DockerActionItem("容器详情", LuckySymbol.search, LuckyTheme.textPrimary) {
+            DockerActionItem("容器详情", LuckySymbol.search, LuckyTheme.textPrimary,
+                             section: "状态与诊断") {
                 Task { await inspect(.container, menu.key) }
             },
             // lucide `FileText`. The dump goes to §18's pane, not to the detail viewer.
-            DockerActionItem("查看日志", "doc.text", LuckyTheme.info) {
+            DockerActionItem("查看日志", "doc.text", LuckyTheme.info,
+                             section: "状态与诊断") {
                 Task { await containerLogs(menu.key) }
             },
         ]
@@ -189,40 +192,45 @@ extension DockerScreen {
     /// Entries 3–8: the file verbs, and the two reads that sit between them.
     private func containerFileItems(_ menu: DockerContainerMenu) -> [DockerActionItem] {
         [
-            DockerActionItem("管理文件", "folder", LuckyTheme.warning) {
-                openEditor(.containerFiles, title: "容器文件操作", value: .object([
-                    ("operation", .string("list")), ("path", .string("/")),
-                ]), key: menu.key)
-            },
-            DockerActionItem("下载文件", LuckySymbol.download, LuckyTheme.info) {
-                openEditor(.containerFileDownload, title: "下载容器文件",
-                           value: .object([("path", .string("/"))]), key: menu.key)
-            },
-            DockerActionItem("上传文件", LuckySymbol.upload, LuckyTheme.warning) {
-                chooseUpload(.containerFileUpload, key: menu.key, title: "上传文件 · \(menu.name)",
-                             fields: JSONObject([("path", .string("/"))]))
-            },
-            DockerActionItem("导出容器", "archivebox", LuckyTheme.warning) {
-                let bare = menu.bareName
-                Task {
-                    await download("导出容器 · \(menu.name)",
-                                   as: "\(bare.isEmpty ? "container" : bare).tar") {
-                        try await DockerService.exportContainer(menu.key)
-                    }
-                }
-            },
-            // lucide `Activity`.
-            DockerActionItem("查看进程", LuckySymbol.monitor, LuckyTheme.info) {
+            DockerActionItem("查看进程", LuckySymbol.monitor, LuckyTheme.info,
+                             section: "状态与诊断") {
                 Task {
                     await openDetail("容器进程 · \(menu.name)") {
                         try await DockerService.containerProcesses(menu.key)
                     }
                 }
             },
-            DockerActionItem("Compose 配置", "doc.text", LuckyTheme.textPrimary) {
+            DockerActionItem("Compose 配置", "doc.text", LuckyTheme.textPrimary,
+                             section: "状态与诊断") {
                 Task {
                     await openDetail("Compose 配置 · \(menu.name)") {
                         try await DockerService.containerComposeConfig(menu.key)
+                    }
+                }
+            },
+            DockerActionItem("管理文件", "folder", LuckyTheme.warning,
+                             section: "文件与备份") {
+                openEditor(.containerFiles, title: "容器文件操作", value: .object([
+                    ("operation", .string("list")), ("path", .string("/")),
+                ]), key: menu.key)
+            },
+            DockerActionItem("下载文件", LuckySymbol.download, LuckyTheme.info,
+                             section: "文件与备份") {
+                openEditor(.containerFileDownload, title: "下载容器文件",
+                           value: .object([("path", .string("/"))]), key: menu.key)
+            },
+            DockerActionItem("上传文件", LuckySymbol.upload, LuckyTheme.warning,
+                             section: "文件与备份") {
+                chooseUpload(.containerFileUpload, key: menu.key, title: "上传文件 · \(menu.name)",
+                             fields: JSONObject([("path", .string("/"))]))
+            },
+            DockerActionItem("导出容器", "archivebox", LuckyTheme.warning,
+                             section: "文件与备份") {
+                let bare = menu.bareName
+                Task {
+                    await download("导出容器 · \(menu.name)",
+                                   as: "\(bare.isEmpty ? "container" : bare).tar") {
+                        try await DockerService.exportContainer(menu.key)
                     }
                 }
             },
@@ -232,45 +240,54 @@ extension DockerScreen {
     /// Entries 9–17: everything that rewrites the container, ending with the two destructive ones.
     private func containerEditItems(_ menu: DockerContainerMenu) -> [DockerActionItem] {
         [
-            DockerActionItem("编辑配置", LuckySymbol.edit, LuckyTheme.accent) {
+            DockerActionItem("编辑配置", LuckySymbol.edit, LuckyTheme.accent,
+                             section: "配置与维护") {
                 Task { await editContainer(menu.key) }
             },
             // lucide `Box`. The rename form starts from the raw name, slash and all.
-            DockerActionItem("重命名", "shippingbox", LuckyTheme.accent) {
+            DockerActionItem("重命名", "shippingbox", LuckyTheme.accent,
+                             section: "配置与维护") {
                 openEditor(.containerRename, title: "重命名容器",
                            value: .object([("name", .string(menu.name))]), key: menu.key)
             },
-            DockerActionItem("复制容器", LuckySymbol.copy, LuckyTheme.accent) {
+            DockerActionItem("复制容器", LuckySymbol.copy, LuckyTheme.accent,
+                             section: "配置与维护") {
                 openEditor(.containerCopy, title: "复制容器",
                            value: .object([("name", .string("\(menu.bareName)-copy"))]),
                            key: menu.key)
             },
-            DockerActionItem("提交为镜像", "archivebox", LuckyTheme.warning) {
+            DockerActionItem("提交为镜像", "archivebox", LuckyTheme.warning,
+                             section: "配置与维护") {
                 openEditor(.containerCommit, title: "提交容器为镜像", value: .object([
                     ("repository", .string("")), ("tag", .string("latest")),
                     ("author", .string("")), ("comment", .string("")), ("pause", .bool(true)),
                 ]), key: menu.key)
             },
-            DockerActionItem("设置标签", "tag", LuckyTheme.accent) {
+            DockerActionItem("设置标签", "tag", LuckyTheme.accent,
+                             section: "配置与维护") {
                 openEditor(.containerLabelSet, title: "设置容器标签",
                            value: .object([("label", .string(""))]), key: menu.key)
             },
-            DockerActionItem("移除标签", LuckySymbol.delete, LuckyTheme.danger) {
-                danger("移除标签", "移除容器 \(menu.name) 的标签？") {
-                    run(DockerMutation(.containerLabelRemove, key: menu.key))
-                }
-            },
             // lucide `Layers`.
-            DockerActionItem("设置分组", "square.3.layers.3d", LuckyTheme.accent) {
+            DockerActionItem("设置分组", "square.3.layers.3d", LuckyTheme.accent,
+                             section: "配置与维护") {
                 openEditor(.containerGroupSet, title: "设置容器分组", value: .object([
                     ("container_name", .string(menu.bareName)), ("group_key", .string("")),
                 ]), key: menu.key)
             },
-            DockerActionItem("切换版本", "arrow.triangle.branch", LuckyTheme.info) {
+            DockerActionItem("切换版本", "arrow.triangle.branch", LuckyTheme.info,
+                             section: "配置与维护") {
                 openEditor(.containerVersionSwitch, title: "切换容器版本",
                            value: .object([("target_image_ref", .string(""))]), key: menu.key)
             },
-            DockerActionItem("删除容器", LuckySymbol.delete, LuckyTheme.danger) {
+            DockerActionItem("移除标签", LuckySymbol.delete, LuckyTheme.danger,
+                             section: "危险操作", destructive: true) {
+                danger("移除标签", "移除容器 \(menu.name) 的标签？") {
+                    run(DockerMutation(.containerLabelRemove, key: menu.key))
+                }
+            },
+            DockerActionItem("删除容器", LuckySymbol.delete, LuckyTheme.danger,
+                             section: "危险操作", destructive: true) {
                 danger("确认删除", "强制删除容器 \(menu.name)？") {
                     run(DockerMutation(.containerRemove, key: menu.key))
                 }

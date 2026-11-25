@@ -13,13 +13,9 @@ struct DockerNetworksView: View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.networks.emptyMessage,
                        symbol: DockerView.networks.symbol,
-                       loadingText: "正在读取 Docker 网络", refresh: refresh) {
-            // 创建网络 is the glass bar's; nothing else was ever in this header.
-            LuckySectionHeader(title: DockerView.networks.title,
-                               symbol: DockerView.networks.symbol,
-                               iconRole: DockerView.networks.iconRole) {
-                DockerCountChip(count: items.count)
-            }
+                       loadingText: "正在读取 Docker 网络",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
+            EmptyView()
         } rows: {
             ForEach(items.indices, id: \.self) { index in
                 let item = items[index]
@@ -47,7 +43,7 @@ private struct DockerNetworkCard: View {
     }
 
     var body: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
+        LuckyCard(padding: 0) {
             HStack(spacing: LuckyTheme.Space.s + 2) {
                 LuckyIconTile(symbol: DockerView.networks.symbol, size: 38, glyph: 19,
                               role: DockerView.networks.iconRole)
@@ -69,6 +65,8 @@ private struct DockerNetworkCard: View {
                     remove(key, name)
                 }
             }
+            .padding(.horizontal, LuckyTheme.Space.cardInset)
+            .padding(.vertical, LuckyTheme.Space.cardInset / 2)
         }
     }
 }

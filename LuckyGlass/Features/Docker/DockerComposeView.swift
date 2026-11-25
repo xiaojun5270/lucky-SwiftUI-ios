@@ -122,7 +122,8 @@ struct DockerComposeView: View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.compose.emptyMessage,
                        symbol: DockerView.compose.symbol,
-                       loadingText: "正在读取 Compose 项目", refresh: refresh) {
+                       loadingText: "正在读取 Compose 项目",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
             header
         } rows: {
             ForEach(items.indices, id: \.self) { index in
@@ -136,18 +137,12 @@ struct DockerComposeView: View {
     /// 创建 Compose has moved into the glass bar with every other list's primary verb, so 扫描项目
     /// is what is left of the two-button row.
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-            LuckySectionHeader(title: DockerView.compose.title,
-                               symbol: DockerView.compose.symbol,
-                               iconRole: DockerView.compose.iconRole) {
-                DockerCountChip(count: items.count)
-            }
-            ServiceActionButton(title: "扫描项目", symbol: LuckySymbol.search, fill: .tinted,
-                                height: 46, radius: LuckyTheme.Radius.row,
-                                name: "扫描 Compose 项目", glyph: 17) {
-                scan()
-            }
+        ServiceActionButton(title: "扫描项目", symbol: LuckySymbol.search, fill: .tinted,
+                            height: 44, radius: LuckyTheme.Radius.row,
+                            name: "扫描 Compose 项目", glyph: 16) {
+            scan()
         }
+        .padding(.bottom, LuckyTheme.Space.xs)
     }
 }
 
@@ -166,9 +161,7 @@ private struct DockerComposeCard: View {
             VStack(alignment: .leading, spacing: LuckyTheme.Space.m / 2) {
                 heading
                 LuckyHairline()
-                commandLayout {
-                    ForEach(Self.primaryVerbs) { verb in button(verb) }
-                }
+                commands
             }
             .padding(.horizontal, LuckyTheme.Space.cardInset)
             .padding(.vertical, LuckyTheme.Space.cardInset / 2)
@@ -233,15 +226,27 @@ private struct DockerComposeCard: View {
         }
     }
 
-    private var commandLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: LuckyTheme.Space.s / 2))
-            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.s))
+    @ViewBuilder
+    private var commands: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: LuckyTheme.Space.s / 2) {
+                ForEach(Self.primaryVerbs) { verb in button(verb, compact: false) }
+            }
+        } else if dynamicTypeSize >= .xLarge {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)],
+                      spacing: 6) {
+                ForEach(Self.primaryVerbs) { verb in button(verb, compact: false) }
+            }
+        } else {
+            HStack(spacing: 6) {
+                ForEach(Self.primaryVerbs) { verb in button(verb, compact: true) }
+            }
+        }
     }
 
-    private func button(_ verb: DockerComposeVerb) -> some View {
+    private func button(_ verb: DockerComposeVerb, compact: Bool) -> some View {
         DockerIconButton(symbol: verb.symbol, label: verb.label, tint: verb.tint,
-                         disabled: busy, fluid: true) {
+                         disabled: busy, fluid: true, compact: compact) {
             perform(verb, target)
         }
     }

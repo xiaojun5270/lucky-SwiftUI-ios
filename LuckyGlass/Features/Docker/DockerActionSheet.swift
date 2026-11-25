@@ -10,14 +10,20 @@ struct DockerActionItem: Identifiable {
     var label: String
     var symbol: String
     var tint: Color
+    var section: String = ""
+    var destructive: Bool = false
     var action: () -> Void
 
     var id: String { label }
 
-    init(_ label: String, _ symbol: String, _ tint: Color, _ action: @escaping () -> Void) {
+    init(_ label: String, _ symbol: String, _ tint: Color,
+         section: String = "", destructive: Bool = false,
+         _ action: @escaping () -> Void) {
         self.label = label
         self.symbol = symbol
         self.tint = tint
+        self.section = section
+        self.destructive = destructive
         self.action = action
     }
 }
@@ -39,16 +45,56 @@ struct DockerActionSheet: View {
     var close: () -> Void
     var items: [DockerActionItem]
 
+    private struct GroupSection: Identifiable {
+        var title: String
+        var items: [DockerActionItem]
+        var id: String { title }
+    }
+
+    private var groupedSections: [GroupSection] {
+        var order: [String] = []
+        var buckets: [String: [DockerActionItem]] = [:]
+        for item in items {
+            if buckets[item.section] == nil { order.append(item.section) }
+            buckets[item.section, default: []].append(item)
+        }
+        return order.map { GroupSection(title: $0, items: buckets[$0] ?? []) }
+    }
+
+    private var hasSections: Bool {
+        items.contains { !$0.section.isEmpty }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 LuckyBackdrop()
                 ScrollView {
-                    // `flexBasis: 145` with `flexGrow: 1` and `gap: 7` — a wrapping row of equal
-                    // buttons, two to a line on a phone, which is what the adaptive grid draws.
-                    LuckyTileGrid(minimum: 145, spacing: 7) {
-                        ForEach(items) { item in
-                            DockerActionRow(item: item, close: close)
+                    VStack(alignment: .leading, spacing: LuckyTheme.Space.l) {
+                        if hasSections {
+                            ForEach(groupedSections) { group in
+                                VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                                    if !group.title.isEmpty {
+                                        Text(group.title)
+                                            .font(LuckyTheme.Text.captionMedium)
+                                            .foregroundStyle(group.title == "危险操作" ? LuckyTheme.danger : LuckyTheme.textTertiary)
+                                            .padding(.horizontal, LuckyTheme.Space.xs)
+                                    }
+                                    LuckyTileGrid(minimum: 145, spacing: 7) {
+                                        ForEach(group.items) { item in
+                                            DockerActionRow(item: item, close: close)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // `flexBasis: 145` with `flexGrow: 1` and `gap: 7` — a wrapping row of equal
+                            // buttons, two to a line on a phone, which is what the adaptive grid draws.
+                            LuckyTileGrid(minimum: 145, spacing: 7) {
+                                ForEach(items) { item in
+                                    DockerActionRow(item: item, close: close)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, LuckyTheme.Space.gutter)
@@ -96,6 +142,11 @@ private struct DockerActionRow: View {
 
     var body: some View {
         Button {
+            if item.destructive {
+                LuckyHaptic.warning()
+            } else {
+                LuckyHaptic.light()
+            }
             // `onPress={() => { close(); action(); }}` — the drawer goes away first, so a form or
             // an alert the action opens is never presented behind it.
             close()
@@ -108,15 +159,20 @@ private struct DockerActionRow: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            // The label takes the icon's colour too, which is what makes 删除容器 read as a warning
-            // at a glance rather than only on inspection.
-            .foregroundStyle(LuckyTheme.textPrimary)
+            // Destructive verbs carry explicit danger tint on label, fill and border so deletions
+            // never blend into neutral maintenance actions.
+            .foregroundStyle(item.destructive ? LuckyTheme.danger : LuckyTheme.textPrimary)
             .padding(.horizontal, 11)
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(shape.fill(LuckyTheme.surfaceRaised))
-            .overlay(shape.strokeBorder(LuckyTheme.hairline, lineWidth: LuckyTheme.strokeWidth))
+            .background(shape.fill(item.destructive ? LuckyTheme.dangerSoft : LuckyTheme.surfaceRaised))
+            .overlay(
+                shape.strokeBorder(
+                    item.destructive ? LuckyTheme.danger.opacity(0.35) : LuckyTheme.hairline,
+                    lineWidth: LuckyTheme.strokeWidth
+                )
+            )
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.72))
     }
 }

@@ -360,6 +360,7 @@ struct ServiceDetailScreen: View {
         let summary = ServiceRecord.rowDetail(item, kind: kind)
         let status = ServiceRecord.rowStatus(item)
         return Button {
+            LuckyHaptic.light()
             selectedKey = expanded ? "" : key
             detail = nil
             detailFailure = ""
@@ -388,8 +389,9 @@ struct ServiceDetailScreen: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.985, pressedOpacity: 0.75))
         .accessibilityLabel("\(name) \(status)")
         .accessibilityHint(expanded ? "收起详情" : "展开详情")
     }

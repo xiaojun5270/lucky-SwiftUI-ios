@@ -142,6 +142,20 @@ enum LuckySymbol {
         case "point.3.connected.trianglepath.dotted": return "point.3.filled.connected.trianglepath.dotted"
         case "trash": return "trash.fill"
         case "shield.lefthalf.filled": return "shield.fill"
+        case "externaldrive": return "externaldrive.fill"
+        case "tag": return "tag.fill"
+        case "lock": return "lock.fill"
+        case "person": return "person.fill"
+        case "wrench.and.screwdriver": return "wrench.and.screwdriver.fill"
+        case "exclamationmark.shield": return "exclamationmark.shield.fill"
+        case "info.circle": return "info.circle.fill"
+        case "checkmark.circle": return "checkmark.circle.fill"
+        case "magnifyingglass.circle": return "magnifyingglass.circle.fill"
+        case "hammer": return "hammer.fill"
+        case "doc.on.doc": return "doc.on.doc.fill"
+        case "doc.on.clipboard": return "doc.on.clipboard.fill"
+        case "eye": return "eye.fill"
+        case "eye.slash": return "eye.slash.fill"
         default:
             return symbol
         }

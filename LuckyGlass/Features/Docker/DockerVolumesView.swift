@@ -67,7 +67,8 @@ struct DockerVolumesView: View {
         DockerListPane(count: items.count, loading: loading,
                        empty: DockerView.volumes.emptyMessage,
                        symbol: DockerView.volumes.symbol,
-                       loadingText: "正在读取数据卷", refresh: refresh) {
+                       loadingText: "正在读取数据卷",
+                       spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
             header
         } rows: {
             ForEach(items.indices, id: \.self) { index in
@@ -80,17 +81,11 @@ struct DockerVolumesView: View {
     /// 创建数据卷 has moved into the glass bar; 导入数据卷 stays, because it opens a file picker and
     /// belongs beside the list it adds to.
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
-            LuckySectionHeader(title: DockerView.volumes.title,
-                               symbol: DockerView.volumes.symbol,
-                               iconRole: DockerView.volumes.iconRole) {
-                DockerCountChip(count: items.count)
-            }
-            ServiceActionButton(title: "导入数据卷", symbol: LuckySymbol.upload, fill: .tinted,
-                                height: 44, radius: LuckyTheme.Radius.row, glyph: 17) {
-                importVolume()
-            }
+        ServiceActionButton(title: "导入数据卷", symbol: LuckySymbol.upload, fill: .tinted,
+                            height: 44, radius: LuckyTheme.Radius.row, glyph: 16) {
+            importVolume()
         }
+        .padding(.bottom, LuckyTheme.Space.xs)
     }
 }
 

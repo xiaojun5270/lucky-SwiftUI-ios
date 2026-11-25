@@ -130,6 +130,7 @@ extension WebLogRow {
     /// and the confirmation alert is what actually gates a second call.
     private var chip: some View {
         Button {
+            LuckyHaptic.warning()
             disconnect(clientKey)
         } label: {
             HStack(spacing: 5) {
@@ -138,7 +139,7 @@ extension WebLogRow {
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .lineLimit(1)
             }
-            .foregroundStyle(LuckyTheme.textPrimary)
+            .foregroundStyle(LuckyTheme.danger)
             .padding(.horizontal, 11)
             .frame(minHeight: 36)
             .background(
@@ -146,7 +147,7 @@ extension WebLogRow {
                     .fill(LuckyTheme.dangerSoft)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.72))
         .opacity(disconnecting ? 0.5 : 1)
         .accessibilityLabel("断开客户端")
     }

@@ -35,13 +35,11 @@ struct DockerSettingsView: View {
 
     var body: some View {
         DockerPaneScroll(refresh: refresh) {
-            LuckySectionHeader(title: "Docker 设置", symbol: LuckySymbol.settings,
-                               iconRole: DockerView.settings.iconRole)
             // `config.data ? … : null` — there is nothing to edit until the daemon's settings are
             // in hand, and an editor opened over an empty record would save an empty record.
             if config != nil {
-                ServiceActionButton(title: "编辑设置", symbol: LuckySymbol.settings, fill: .solid,
-                                    height: 46, radius: LuckyTheme.Radius.row, glyph: 17) {
+                ServiceActionButton(title: "编辑 Docker 设置", symbol: LuckySymbol.settings, fill: .solid,
+                                    height: 44, radius: LuckyTheme.Radius.row, glyph: 16) {
                     actions.editConfig()
                 }
             }
@@ -50,7 +48,7 @@ struct DockerSettingsView: View {
             }
             LuckySectionHeader(title: "维护状态", symbol: LuckySymbol.monitor,
                                iconRole: .system) {
-                Text(maintenanceFetching ? "正在刷新" : "7 个接口")
+                Text(maintenanceFetching ? "正在刷新" : "已同步")
                     .font(LuckyTheme.Text.caption)
                     .foregroundStyle(LuckyTheme.textSecondary)
             }
@@ -132,13 +130,8 @@ extension DockerSettingsView {
         }
     }
 
-    /// §17.6 — the one panel whose heading is plain text and not a `SectionHeader`. Kept that way:
-    /// `Registry Mirrors` is the daemon's own term and the only untranslated string in the screen.
     private var mirrorPanel: some View {
-        LuckyCard(spacing: LuckyTheme.Space.m) {
-            Text("Registry Mirrors")
-                .font(LuckyTheme.Text.bodyMedium)
-                .foregroundStyle(LuckyTheme.textPrimary)
+        panel(title: "镜像加速源", symbol: "globe.asia.australia", iconRole: .network) {
             StructuredDataView(value: mirrorList)
             HStack(spacing: LuckyTheme.Space.s) {
                 ServiceActionButton(title: "添加", symbol: LuckySymbol.add, fill: .tinted,

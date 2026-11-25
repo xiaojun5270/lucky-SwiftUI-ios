@@ -48,7 +48,10 @@ struct ServiceActionButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             HStack(spacing: 5) {
                 if busy {
                     ProgressView()
@@ -69,7 +72,7 @@ struct ServiceActionButton: View {
             .overlay(border)
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.75))
         .disabled(disabled)
         .opacity(disabled && dim ? 0.45 : 1)
         .accessibilityLabel(name ?? title)

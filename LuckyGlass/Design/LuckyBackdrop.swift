@@ -10,7 +10,7 @@ struct LuckyBackdrop: View {
         ZStack {
             LuckyTheme.canvasTop.ignoresSafeArea()
 
-            // Ambient illumination glow at the top for spatial hierarchy and glass refraction depth
+            // Smooth multi-stop radial glows provide spatial depth without offscreen Gaussian blur passes.
             GeometryReader { proxy in
                 let width = proxy.size.width
                 let isDark = colorScheme == .dark
@@ -19,35 +19,35 @@ struct LuckyBackdrop: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [
-                                (isDark ? LuckyTheme.accent.opacity(0.12) : LuckyTheme.accent.opacity(0.06)),
-                                .clear
+                            stops: [
+                                .init(color: LuckyTheme.accent.opacity(isDark ? 0.13 : 0.065), location: 0.0),
+                                .init(color: LuckyTheme.accent.opacity(isDark ? 0.05 : 0.025), location: 0.45),
+                                .init(color: .clear, location: 1.0),
                             ],
                             center: .center,
                             startRadius: 0,
-                            endRadius: width * 0.65
+                            endRadius: width * 0.72
                         )
                     )
-                    .frame(width: width * 1.3, height: width * 1.3)
-                    .position(x: width * 0.2, y: -width * 0.2)
-                    .blur(radius: 60)
+                    .frame(width: width * 1.44, height: width * 1.44)
+                    .position(x: width * 0.2, y: -width * 0.18)
 
                 // Top-trailing subtle secondary glow
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [
-                                (isDark ? LuckyTheme.info.opacity(0.08) : LuckyTheme.info.opacity(0.04)),
-                                .clear
+                            stops: [
+                                .init(color: LuckyTheme.info.opacity(isDark ? 0.09 : 0.045), location: 0.0),
+                                .init(color: LuckyTheme.info.opacity(isDark ? 0.035 : 0.015), location: 0.48),
+                                .init(color: .clear, location: 1.0),
                             ],
                             center: .center,
                             startRadius: 0,
-                            endRadius: width * 0.55
+                            endRadius: width * 0.62
                         )
                     )
-                    .frame(width: width * 1.1, height: width * 1.1)
+                    .frame(width: width * 1.24, height: width * 1.24)
                     .position(x: width * 0.85, y: width * 0.1)
-                    .blur(radius: 50)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)

@@ -738,6 +738,7 @@ struct StructuredForm: View {
 struct StructuredDataView: View {
     var value: JSONValue
     var depth: Int = 0
+    var alignTrailing: Bool = false
 
     /// Every Lucky response carries `{ret, msg}`; the screen shows the status and the message above
     /// the body, so repeating them inside it is noise.
@@ -747,16 +748,21 @@ struct StructuredDataView: View {
     private static let cap = 200
 
     var body: some View {
-        if let object = value.objectValue {
+        let resolved = unwrapped(value)
+        if let object = resolved.objectValue {
             record(object)
-        } else if let items = value.arrayValue {
+        } else if let items = resolved.arrayValue {
             list(items)
-        } else if let string = value.stringValue,
-                  let parsed = parseJsonString(string) {
-            StructuredDataView(value: parsed, depth: depth + 1)
         } else {
             scalar
         }
+    }
+
+    private func unwrapped(_ raw: JSONValue) -> JSONValue {
+        if let string = raw.stringValue, let parsed = parseJsonString(string) {
+            return parsed
+        }
+        return raw
     }
 
     private func parseJsonString(_ text: String) -> JSONValue? {
@@ -766,6 +772,12 @@ struct StructuredDataView: View {
         guard let parsed = try? JSONParser.parse(trimmed),
               parsed.isRecord || parsed.isArray else { return nil }
         return parsed
+    }
+
+    private static func isMultilineOrLong(_ raw: JSONValue) -> Bool {
+        if raw.boolValue != nil || raw.isNull { return false }
+        let display = raw.asDisplayString
+        return display.contains("\n") || display.count > 36
     }
 
     private func record(_ object: JSONObject) -> AnyView {
@@ -785,14 +797,16 @@ struct StructuredDataView: View {
 
     @ViewBuilder
     private func entryRow(_ entry: (key: String, value: JSONValue)) -> some View {
-        let isComposite = entry.value.isRecord || entry.value.isArray
-        if isComposite {
+        let resolved = unwrapped(entry.value)
+        let isComposite = resolved.isRecord || resolved.isArray
+        let isLongScalar = !isComposite && Self.isMultilineOrLong(resolved)
+        if isComposite || isLongScalar {
             VStack(alignment: .leading, spacing: 5) {
                 Text(LuckyFieldName.label(entry.key))
                     .font(LuckyTheme.Text.captionMedium)
                     .foregroundStyle(LuckyTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                StructuredDataView(value: entry.value, depth: depth + 1)
+                StructuredDataView(value: resolved, depth: depth + 1, alignTrailing: false)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, depth > 0 ? 10 : 0)
@@ -804,13 +818,13 @@ struct StructuredDataView: View {
                 }
             }
         } else {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: LuckyTheme.Space.s) {
                 Text(LuckyFieldName.label(entry.key))
                     .font(LuckyTheme.Text.label)
                     .foregroundStyle(LuckyTheme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: LuckyTheme.Space.s)
-                StructuredDataView(value: entry.value, depth: depth + 1)
+                StructuredDataView(value: resolved, depth: depth + 1, alignTrailing: true)
             }
             .padding(.vertical, 2)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -844,6 +858,7 @@ struct StructuredDataView: View {
             .font(LuckyTheme.Text.caption)
             .foregroundStyle(LuckyTheme.textPrimary)
             .lineSpacing(3)
+            .multilineTextAlignment(alignTrailing ? .trailing : .leading)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }

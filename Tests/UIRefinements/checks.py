@@ -72,7 +72,8 @@ class UIRefinementsChecks(unittest.TestCase):
     def test_visual_design_depth_and_telemetry(self):
         backdrop = source("Design/LuckyBackdrop.swift")
         self.assertIn("RadialGradient", backdrop)
-        self.assertIn(".blur(radius:", backdrop)
+        self.assertIn("stops: [", backdrop)
+        self.assertNotIn(".blur(radius:", backdrop)
 
         surface = source("Design/LuckySurface.swift")
         self.assertIn(".shadow(", surface)
@@ -83,6 +84,7 @@ class UIRefinementsChecks(unittest.TestCase):
         gauge = source("Design/LuckyGauge.swift")
         self.assertIn("peakTelemetryString", gauge)
         self.assertIn("Text(\"%\")", gauge)
+        self.assertIn("var detail: String? = nil", gauge)
 
         web = source("Features/WebService/WebSubRuleCard.swift")
         self.assertIn("topologyNode(", web)
@@ -140,9 +142,60 @@ class UIRefinementsChecks(unittest.TestCase):
 
         form = source("Features/Endpoints/StructuredForm.swift")
         self.assertIn("parseJsonString", form)
+        self.assertIn("unwrapped(", form)
+        self.assertIn("isMultilineOrLong", form)
         self.assertIn('"ip": "IP 地址"', form)
         self.assertIn('"status": "状态"', form)
         self.assertIn('"RuleName": "规则名称"', form)
+
+    def test_p0_visual_bug_fixes(self):
+        containers = source("Features/Docker/DockerContainersView.swift")
+        self.assertIn("if row.paused { return .warning }", containers)
+        self.assertNotIn("LuckyTheme.idleSoft", containers)
+
+        compose = source("Features/Docker/DockerComposeView.swift")
+        self.assertIn("compact: compact", compose)
+
+        controls = source("Features/Docker/DockerControls.swift")
+        self.assertIn("var compact: Bool = false", controls)
+        self.assertIn("LuckySymbol.solid(metric.symbol)", controls)
+        self.assertIn("tray.and.arrow.down.fill", controls)
+        self.assertIn("tray.and.arrow.up.fill", controls)
+
+        chip = source("Design/LuckyChip.swift")
+        self.assertIn("if shouldPulse {", chip)
+        self.assertIn(".onChange(of: shouldPulse)", chip)
+
+        glass = source("Design/LuckyGlassControls.swift")
+        self.assertIn("var multiline: Bool = false", glass)
+        self.assertIn("struct LuckyHorizontalTabBar<Value: Hashable>: View", glass)
+
+        feedback = source("Design/LuckyFeedback.swift")
+        self.assertIn("multiline: true", feedback)
+
+    def test_p1_p2_polish_navigation_and_performance(self):
+        docker_screen = source("Features/Docker/DockerScreen.swift")
+        self.assertIn("LuckyHorizontalTabBar(", docker_screen)
+
+        web_screen = source("Features/WebService/WebServiceScreen.swift")
+        self.assertIn("LuckyHorizontalTabBar(", web_screen)
+
+        action_sheet = source("Features/Docker/DockerActionSheet.swift")
+        self.assertIn("var destructive: Bool = false", action_sheet)
+        self.assertIn("item.destructive ? LuckyTheme.danger : LuckyTheme.textPrimary", action_sheet)
+
+        logs = source("Features/Logs/LogsScreen.swift")
+        self.assertIn("cachedVisibleLines", logs)
+        self.assertIn("recomputeVisibleLines()", logs)
+
+        login = source("Features/Login/LoginScreen.swift")
+        self.assertIn("@FocusState private var focusedField: Field?", login)
+        self.assertIn("LuckyPressStyle(", login)
+
+        dashboard = source("Features/Dashboard/DashboardScreen.swift")
+        self.assertIn("session.updateRemark(", dashboard)
+        self.assertIn("session.removeProfile(", dashboard)
+        self.assertIn("LuckyStatusDot(tone: connected ? .ok : .warning, pulsing: connected", dashboard)
 
 
 if __name__ == "__main__":

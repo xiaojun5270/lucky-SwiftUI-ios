@@ -26,19 +26,20 @@ enum LuckyIconRole: String, CaseIterable, Sendable {
     }
 
     /// Shared hues keep each function recognisable across lists, forms and shortcuts.
-    private static let purple = LuckyTheme.dynamic(light: 0x6D4FC7, dark: 0x7B5FD3)
-    private static let blue = LuckyTheme.dynamic(light: 0x2472DE, dark: 0x2F7FE8)
-    private static let teal = LuckyTheme.dynamic(light: 0x0E8C82, dark: 0x12998E)
-    private static let green = LuckyTheme.dynamic(light: 0x1A8F4C, dark: 0x1E9C55)
-    private static let grape = LuckyTheme.dynamic(light: 0x8B3FD4, dark: 0x9750DC)
-    private static let orange = LuckyTheme.dynamic(light: 0xCF6210, dark: 0xD86F1C)
-    private static let berry = LuckyTheme.dynamic(light: 0xC42A6B, dark: 0xCE3A78)
-    private static let amber = LuckyTheme.dynamic(light: 0xB8790E, dark: 0xC28418)
+    /// Dark-mode values are luminance-lifted for crisp contrast (>= 5.3:1) as frameless solid glyphs.
+    private static let purple = LuckyTheme.dynamic(light: 0x6D4FC7, dark: 0xA48BF5)
+    private static let blue = LuckyTheme.dynamic(light: 0x2472DE, dark: 0x62A3FF)
+    private static let teal = LuckyTheme.dynamic(light: 0x0E8C82, dark: 0x35C9BD)
+    private static let green = LuckyTheme.dynamic(light: 0x1A8F4C, dark: 0x38D47C)
+    private static let grape = LuckyTheme.dynamic(light: 0x8B3FD4, dark: 0xBD85FA)
+    private static let orange = LuckyTheme.dynamic(light: 0xCF6210, dark: 0xFA964B)
+    private static let berry = LuckyTheme.dynamic(light: 0xC42A6B, dark: 0xF573A8)
+    private static let amber = LuckyTheme.dynamic(light: 0xB8790E, dark: 0xF2B23D)
     /// Storage keeps a warm earth tone so it stays distinct from amber, but as bronze rather
     /// than the previous flat brown.
-    private static let bronze = LuckyTheme.dynamic(light: 0x96684A, dark: 0xA17455)
-    private static let magenta = LuckyTheme.dynamic(light: 0xB32BAF, dark: 0xBE3ABA)
-    private static let graphite = LuckyTheme.dynamic(light: 0x5B6779, dark: 0x687487)
+    private static let bronze = LuckyTheme.dynamic(light: 0x96684A, dark: 0xCF9A76)
+    private static let magenta = LuckyTheme.dynamic(light: 0xB32BAF, dark: 0xE87BE5)
+    private static let graphite = LuckyTheme.dynamic(light: 0x5B6779, dark: 0x9AA6B8)
 
     /// Defaults for unambiguous utility glyphs. A new symbol gets a neutral plate until its
     /// feature supplies a role, rather than silently adding another blue icon.

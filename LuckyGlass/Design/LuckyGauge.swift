@@ -7,6 +7,7 @@ import SwiftUI
 struct LuckyLoadGauge: View {
     var label: String
     var value: Double?
+    var detail: String? = nil
     var size: CGFloat = 82
 
     private var validValue: Double? {
@@ -55,16 +56,26 @@ struct LuckyLoadGauge: View {
             }
             .frame(width: size, height: size)
 
-            Text(label)
-                .font(LuckyTheme.Text.captionMedium)
-                .foregroundStyle(LuckyTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 2) {
+                Text(label)
+                    .font(LuckyTheme.Text.captionMedium)
+                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .animation(LuckyTheme.Motion.snap, value: progress)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(validValue == nil ? "正在读取" : "百分之 " + displayValue)
+        .accessibilityValue(validValue == nil ? "正在读取" : "百分之 " + displayValue + (detail.map { "，\($0)" } ?? ""))
     }
 }
 

@@ -79,6 +79,40 @@ final class LuckySession {
         await syncClient()
     }
 
+    func updateRemark(_ remark: String, for profileID: String) {
+        guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
+        let trimmed = remark.jsTrimmed
+        profiles[index].remark = trimmed
+        if activeProfileID == profileID {
+            self.remark = trimmed
+        }
+        persistProfiles()
+    }
+
+    func removeProfile(id profileID: String) async {
+        guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
+        let wasActive = activeProfileID == profileID
+        profiles.remove(at: index)
+        if wasActive {
+            if let fallback = profiles.first {
+                load(fallback)
+            } else {
+                activeProfileID = nil
+                baseUrl = ""
+                account = ""
+                password = ""
+                token = ""
+                remark = ""
+            }
+            sessionGeneration += 1
+            LuckyStatusStore.shared.resetForSessionChange()
+            persistProfiles()
+            await syncClient()
+        } else {
+            persistProfiles()
+        }
+    }
+
     func saveToken(_ token: String, ifGeneration: UInt64? = nil) async {
         guard ifGeneration == nil || ifGeneration == sessionGeneration else { return }
         self.token = token

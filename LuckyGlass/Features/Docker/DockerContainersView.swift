@@ -11,6 +11,28 @@ struct DockerContainerActions {
     var update: (String, String) -> Void
 }
 
+private enum DockerContainerFilter: String, CaseIterable, Identifiable {
+    case all, running, stopped
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .running: return "运行中"
+        case .stopped: return "已停止"
+        }
+    }
+
+    var tone: LuckyTone {
+        switch self {
+        case .all: return .brand
+        case .running: return .ok
+        case .stopped: return .idle
+        }
+    }
+}
+
 /// §10's 容器 list.
 struct DockerContainersView: View {
     var items: [LuckyListItem]
@@ -21,6 +43,8 @@ struct DockerContainersView: View {
     var refresh: @Sendable () async -> Void
     var actions: DockerContainerActions
 
+    @State private var filter: DockerContainerFilter = .all
+
     /// Every row's derivation is memoized by the container and icon-library values. A statistics
     /// tick therefore reuses the rows verbatim instead of repeating raw-record parsing or scanning
     /// the whole icon catalogue.
@@ -28,27 +52,84 @@ struct DockerContainersView: View {
         DockerIconIndex.shared.rows(items: items, icons: icons)
     }
 
+    private var displayedRows: [DockerContainerRow] {
+        switch filter {
+        case .all: return rows
+        case .running: return rows.filter(\.running)
+        case .stopped: return rows.filter { !$0.running }
+        }
+    }
+
+    private func count(for option: DockerContainerFilter) -> Int {
+        switch option {
+        case .all: return rows.count
+        case .running: return rows.filter(\.running).count
+        case .stopped: return rows.filter { !$0.running }.count
+        }
+    }
+
     var body: some View {
-        DockerListPane(count: items.count, loading: loading,
-                       empty: DockerView.containers.emptyMessage,
+        DockerListPane(count: displayedRows.count, loading: loading,
+                       empty: rows.isEmpty ? DockerView.containers.emptyMessage : "暂无符合条件的容器",
                        symbol: DockerView.containers.symbol,
                        loadingText: "正在读取容器",
                        spacing: LuckyTheme.Space.stack / 2, refresh: refresh) {
-            LuckySectionHeader(title: DockerView.containers.title,
-                               symbol: DockerView.containers.symbol,
-                               iconRole: DockerView.containers.iconRole) {
-                DockerCountChip(count: items.count)
+            if !rows.isEmpty {
+                filterBar
             }
         } rows: {
             // Identified by the container itself rather than by its array offset. An offset shifts
             // for every row below an insertion, so starting or removing one container told SwiftUI
             // that every row after it was a different row and the whole list was rebuilt.
-            ForEach(rows, id: \.identity) { row in
+            ForEach(displayedRows, id: \.identity) { row in
                 // Each card gets the one statistics row it draws, not the whole table: handing the
                 // dictionary down meant any tick invalidated every card in the list.
                 DockerContainerCard(row: row, stat: row.stats(stats), busy: busy, actions: actions)
             }
         }
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: LuckyTheme.Space.s) {
+            ForEach(DockerContainerFilter.allCases) { option in
+                let selected = filter == option
+                let total = count(for: option)
+                Button {
+                    guard !selected else { return }
+                    LuckyHaptic.selection()
+                    withAnimation(LuckyTheme.Motion.snap) { filter = option }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(option.title)
+                            .font(LuckyTheme.Text.captionMedium)
+                            .lineLimit(1)
+                        Text("\(total)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .opacity(selected ? 0.9 : 0.7)
+                    }
+                    .foregroundStyle(selected ? option.tone.tint : LuckyTheme.textSecondary)
+                    .padding(.horizontal, LuckyTheme.Space.m)
+                    .frame(minHeight: 32)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(selected ? option.tone.fill : LuckyTheme.surface)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(
+                                selected ? option.tone.tint.opacity(0.35) : LuckyTheme.hairline.opacity(0.4),
+                                lineWidth: LuckyTheme.strokeWidth
+                            )
+                    )
+                    .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
+                .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, LuckyTheme.Space.xs)
     }
 }
 
@@ -150,20 +231,27 @@ private struct DockerContainerCard: View {
         .frame(minHeight: 54)
     }
 
-    /// The status pill: a 6 pt dot and the uptime phrase, tinted by whether the container is up.
+    private var badgeTone: LuckyTone {
+        if row.paused { return .warning }
+        if row.running { return .ok }
+        return .idle
+    }
+
+    /// The status pill: a 6 pt dot and the uptime phrase, tinted by running / paused / stopped state.
     private var badge: some View {
-        HStack(spacing: 5) {
+        let tone = badgeTone
+        return HStack(spacing: 5) {
             Circle()
-                .fill(row.running ? LuckyTheme.success : LuckyTheme.idleSoft)
+                .fill(tone.tint)
                 .frame(width: 6, height: 6)
             Text(row.status)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(row.running ? LuckyTheme.success : LuckyTheme.textSecondary)
+                .foregroundStyle(tone == .idle ? LuckyTheme.textSecondary : tone.tint)
                 .lineLimit(1)
         }
         .padding(.horizontal, LuckyTheme.Space.s)
         .frame(minHeight: 24)
-        .background(row.running ? LuckyTheme.successSoft : LuckyTheme.surfaceRaised,
+        .background(tone == .idle ? LuckyTheme.surfaceRaised : tone.fill,
                     in: .rect(cornerRadius: 8))
     }
 

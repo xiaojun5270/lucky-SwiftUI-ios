@@ -68,5 +68,20 @@ actor LuckyClient {
         await session.saveToken("ABA-WRONG", ifGeneration: beforeReturn)
         precondition(session.token == "updated", "A → B → A must not revive stale A refresh")
         print("PASS returning to same profile does not revive old generation")
+        let genBeforeRemark = session.sessionGeneration
+        session.updateRemark("  Home NAS  ", for: original)
+        precondition(session.remark == "Home NAS" && session.sessionGeneration == genBeforeRemark)
+        session.updateRemark("Secondary", for: second)
+        precondition(session.profiles.first(where: { $0.id == second })?.remark == "Secondary")
+        let third = session.profiles.first(where: { $0.id != original && $0.id != second })!.id
+        await session.removeProfile(id: third)
+        precondition(session.profiles.count == 2 && session.activeProfileID == original)
+        let genBeforeDeleteActive = session.sessionGeneration
+        await session.removeProfile(id: original)
+        precondition(session.profiles.count == 1 && session.activeProfileID == second)
+        precondition(session.sessionGeneration != genBeforeDeleteActive)
+        await session.removeProfile(id: second)
+        precondition(session.profiles.isEmpty && session.activeProfileID == nil && !session.isAuthenticated)
+        print("PASS profile remark editing and profile removal lifecycle")
     }
 }

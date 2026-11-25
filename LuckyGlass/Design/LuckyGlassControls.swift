@@ -78,53 +78,72 @@ struct LuckyGlassIconButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             LuckyIconTile(symbol: symbol, size: 40, glyph: 16,
                           tone: prominent || tone != .brand ? tone : nil, filled: prominent)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.92, pressedOpacity: 0.7))
         .accessibilityLabel(label)
     }
 }
 
 /// A read-only floating badge — the live-connection pill over the monitor chart, the "只读" marker
-/// over a GET result. Not a button, so it gets glass directly instead of a button style.
+/// over a GET result, or a transient toast. Not a button, so it gets glass directly instead of a
+/// button style.
 struct LuckyGlassBadge: View {
     var text: String
     var symbol: String?
     var tone: LuckyTone = .idle
     var pulsing: Bool = false
+    var multiline: Bool = false
 
     var body: some View {
-        HStack(spacing: LuckyTheme.Space.xs) {
+        let label = HStack(alignment: multiline ? .top : .center, spacing: LuckyTheme.Space.xs) {
             if pulsing {
                 LuckyStatusDot(tone: tone, pulsing: true, size: 7)
+                    .padding(.top, multiline ? 4 : 0)
             } else if let symbol {
-                Image(systemName: symbol).font(.system(size: 11, weight: .bold))
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.top, multiline ? 2 : 0)
             }
-            Text(text).font(LuckyTheme.Text.captionMedium).lineLimit(1)
+            Text(text)
+                .font(LuckyTheme.Text.captionMedium)
+                .lineLimit(multiline ? 3 : 1)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: multiline)
         }
         .foregroundStyle(tone.tint)
         .padding(.horizontal, LuckyTheme.Space.m)
-        .padding(.vertical, 7)
-        .glassEffect(.regular, in: .capsule)
+        .padding(.vertical, multiline ? 9 : 7)
+
+        if multiline {
+            label.glassEffect(.regular, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
+        } else {
+            label.glassEffect(.regular, in: .capsule)
+        }
     }
 }
 
-/// One option of a segmented control.
+/// One option of a segmented control or horizontal pill tab bar.
 struct LuckySegment<Value: Hashable>: Identifiable {
     var value: Value
     var title: String
     var symbol: String?
+    var badge: Int?
 
     var id: Value { value }
 
-    init(_ value: Value, _ title: String, symbol: String? = nil) {
+    init(_ value: Value, _ title: String, symbol: String? = nil, badge: Int? = nil) {
         self.value = value
         self.title = title
         self.symbol = symbol
+        self.badge = badge
     }
 }
 
@@ -242,5 +261,87 @@ struct LuckyGlassMenuPicker<Value: Hashable>: View {
             .glassEffect(.regular, in: .capsule)
         }
         .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+/// A horizontally scrollable one-tap pill bar for multi-pane workspaces such as Docker and Web 服务.
+/// Lives in the pinned header above scrolling content, using solid filled surfaces instead of glass
+/// so pills remain crisp and scroll at 120Hz without offscreen glass refraction passes.
+struct LuckyHorizontalTabBar<Value: Hashable>: View {
+    @Binding var selection: Value
+    var segments: [LuckySegment<Value>]
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: LuckyTheme.Space.s) {
+                    ForEach(segments) { segment in
+                        pill(segment)
+                            .id(segment.value)
+                    }
+                }
+                .padding(.horizontal, LuckyTheme.Space.gutter)
+                .padding(.vertical, 2)
+            }
+            .onChange(of: selection) {
+                withAnimation(LuckyTheme.Motion.snap) {
+                    proxy.scrollTo(selection, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private func pill(_ segment: LuckySegment<Value>) -> some View {
+        let selected = segment.value == selection
+        return Button {
+            guard !selected else { return }
+            LuckyHaptic.selection()
+            withAnimation(LuckyTheme.Motion.snap) { selection = segment.value }
+        } label: {
+            HStack(spacing: 5) {
+                if let symbol = segment.symbol {
+                    Image(systemName: LuckySymbol.solid(symbol))
+                        .font(.system(size: 12, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                Text(segment.title)
+                    .font(LuckyTheme.Text.captionMedium)
+                    .lineLimit(1)
+                if let badge = segment.badge {
+                    Text("\(badge)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(selected
+                                      ? LuckyTheme.textOnAccent.opacity(0.22)
+                                      : LuckyTheme.surfaceRaised)
+                        )
+                }
+            }
+            .foregroundStyle(selected ? LuckyTheme.textOnAccent : LuckyTheme.textSecondary)
+            .padding(.horizontal, LuckyTheme.Space.m)
+            .frame(minHeight: 36)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(selected ? LuckyTheme.accent : LuckyTheme.surface)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(
+                        selected
+                            ? Color.clear
+                            : LuckyTheme.hairline.opacity(colorScheme == .dark ? 0.45 : 0.4),
+                        lineWidth: LuckyTheme.strokeWidth
+                    )
+            )
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
     }
 }

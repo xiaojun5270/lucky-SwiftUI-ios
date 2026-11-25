@@ -13,8 +13,6 @@ struct WebSettingsView: View {
 
     var body: some View {
         WebPaneScroll(refresh: refresh) {
-            LuckySectionHeader(title: WebPane.settings.title, symbol: WebPane.settings.symbol,
-                               iconRole: WebPane.settings.iconRole)
             if loading {
                 LuckyLoadingView(text: "正在读取模块设置")
             } else if let value {

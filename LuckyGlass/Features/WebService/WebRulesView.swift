@@ -31,10 +31,6 @@ struct WebRulesView: View {
     var body: some View {
         ScrollViewReader { proxy in
             WebPaneScroll(refresh: refresh) {
-                LuckySectionHeader(title: WebPane.rules.title, symbol: WebPane.rules.symbol,
-                                   iconRole: WebPane.rules.iconRole) {
-                    LuckyChip(text: "\(items.count) 项", tone: .idle)
-                }
                 if loading {
                     LuckyLoadingView(text: "正在读取 Web 服务规则")
                 } else if items.isEmpty {

@@ -45,24 +45,28 @@ struct SettingsScreen: View {
 
     private var account: some View {
         LuckyCard {
-            HStack(spacing: LuckyTheme.Space.l) {
-                LuckyIconTile(symbol: "person.crop.circle", size: 56, glyph: 28, role: .account)
-                VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: LuckyTheme.Space.m) {
+                LuckyIconTile(symbol: "person.crop.circle", size: 52, glyph: 26, role: .account)
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: LuckyTheme.Space.xs) {
                         Text(session.account.isEmpty ? "管理员" : session.account)
                             .font(LuckyTheme.Text.title)
                             .foregroundStyle(LuckyTheme.textPrimary)
+                            .lineLimit(1)
                         if !session.remark.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text("(\(session.remark.trimmingCharacters(in: .whitespacesAndNewlines)))")
                                 .font(LuckyTheme.Text.body)
                                 .foregroundStyle(LuckyTheme.textSecondary)
+                                .lineLimit(1)
                         }
                     }
                     Text("当前登录账户 · \(session.profiles.count) 个已保存账号")
-                        .font(LuckyTheme.Text.body)
+                        .font(LuckyTheme.Text.caption)
                         .foregroundStyle(LuckyTheme.textSecondary)
+                        .lineLimit(1)
                 }
-                Spacer(minLength: 0)
+                .layoutPriority(1)
+                Spacer(minLength: LuckyTheme.Space.xs)
                 Button {
                     LuckyHaptic.selection()
                     showingAccounts = true
@@ -74,8 +78,10 @@ struct SettingsScreen: View {
                     .font(LuckyTheme.Text.captionMedium)
                     .foregroundStyle(LuckyTheme.accent)
                     .padding(.horizontal, LuckyTheme.Space.m)
-                    .frame(minHeight: 32)
+                    .frame(minHeight: 36)
                     .background(LuckyTheme.accentSoft, in: .capsule)
+                    .frame(minHeight: LuckyTheme.Space.touchTarget)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(LuckyPressStyle(pressedScale: 0.95, pressedOpacity: 0.75))
                 .accessibilityLabel("切换已保存的账号")
@@ -114,23 +120,24 @@ struct SettingsScreen: View {
                 .accessibilityLabel("复制服务器地址")
             }
             LuckyHairline()
-            LuckyRow("连接协议", usesHTTPS ? "HTTPS" : "HTTP", mono: true)
+            LuckyRow("连接协议", usesHTTPS ? "HTTPS 加密" : "HTTP 明文",
+                     mono: false, tone: usesHTTPS ? .ok : .warning)
         }
     }
 
     private var security: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
             LuckySection(title: "安全与隐私", spacing: LuckyTheme.Space.l) {
-                securityRow("key", "登录凭据", detail: "保存在设备钥匙串", role: .security)
+                securityRow("key", "登录凭据", detail: "保存在设备系统钥匙串", role: .security)
                 LuckyHairline().padding(.leading, 52)
-                securityRow(usesHTTPS ? "lock.shield" : "network", "服务器连接",
-                            detail: usesHTTPS ? "HTTPS 加密传输" : "HTTP 连接",
-                            role: usesHTTPS ? .security : .network)
+                securityRow("lock.shield", "直连通信",
+                            detail: "直接访问你的 Lucky 实例，不经过任何第三方中转",
+                            role: .security)
             }
             if !usesHTTPS {
-                Text("公网访问建议为 Lucky 配置 HTTPS 与访问控制。")
+                Text("当前为 HTTP 连接，公网访问建议为 Lucky 配置 HTTPS 与访问控制。")
                     .font(LuckyTheme.Text.caption)
-                    .foregroundStyle(LuckyTheme.textSecondary)
+                    .foregroundStyle(LuckyTheme.warning)
                     .padding(.horizontal, LuckyTheme.Space.xs)
             }
         }
@@ -160,17 +167,16 @@ struct SettingsScreen: View {
                 confirming = true
             } label: {
                 HStack(spacing: LuckyTheme.Space.m) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(LuckyTheme.Text.bodyMedium)
-                        .frame(width: 36)
+                    LuckyIconTile(symbol: "rectangle.portrait.and.arrow.right", size: 32, glyph: 16, tone: .danger)
                     Text(busy ? "正在退出…" : "退出登录")
                         .font(LuckyTheme.Text.bodyMedium)
                     Spacer(minLength: 0)
                     if busy { ProgressView().tint(LuckyTheme.danger) }
                 }
                 .foregroundStyle(LuckyTheme.danger)
-                .padding(LuckyTheme.Space.cardInset)
-                .frame(maxWidth: .infinity, minHeight: 60)
+                .padding(.horizontal, LuckyTheme.Space.cardInset)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, minHeight: 54)
                 .contentShape(Rectangle())
             }
             .buttonStyle(LuckyPressStyle())

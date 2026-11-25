@@ -8,6 +8,7 @@ import SwiftUI
 /// The visible consequence is that the `SectionHeader` scrolls with the rows where the `FlatList`'s
 /// stayed put; the pane picker above it is pinned instead, which keeps the six views one tap apart.
 struct WebPaneScroll<Content: View>: View {
+    var topPadding: CGFloat = LuckyTheme.Space.s
     var refresh: @Sendable () async -> Void
     @ViewBuilder var content: () -> Content
 
@@ -15,7 +16,7 @@ struct WebPaneScroll<Content: View>: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: LuckyTheme.Space.stack, content: content)
                 .padding(.horizontal, LuckyTheme.Space.gutter)
-                .padding(.top, LuckyTheme.Space.pageTop)
+                .padding(.top, topPadding)
                 .padding(.bottom, LuckyTheme.Space.pageBottom)
                 .frame(maxWidth: LuckyTheme.Layout.contentWidth)
                 .frame(maxWidth: .infinity)
@@ -50,7 +51,10 @@ struct WebIconButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             HStack(spacing: 4) {
                 LuckyFunctionIcon(symbol: symbol, size: 24, glyph: 11, color: tint)
                 Text(text ?? name)
@@ -63,7 +67,7 @@ struct WebIconButton: View {
             .background(shape.fill(LuckyTheme.surfaceRaised))
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.72))
         .disabled(disabled)
         .opacity(disabled ? 0.4 : 1)
         .accessibilityLabel(name)
@@ -84,7 +88,10 @@ struct WebInlineActionButton: View {
     private var shape: Capsule { Capsule(style: .continuous) }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             HStack(spacing: 6) {
                 if prominent {
                     Image(systemName: symbol)
@@ -108,7 +115,7 @@ struct WebInlineActionButton: View {
             )
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.75))
         .disabled(disabled)
         .opacity(disabled ? 0.4 : 1)
         .accessibilityLabel(title)
@@ -152,10 +159,13 @@ struct WebRuleActionButton: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            LuckyHaptic.light()
+            action()
+        } label: {
             WebRuleActionLabel(title: title, symbol: symbol, selected: selected, fills: fills)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.75))
         .disabled(disabled)
         .opacity(disabled ? 0.45 : 1)
     }

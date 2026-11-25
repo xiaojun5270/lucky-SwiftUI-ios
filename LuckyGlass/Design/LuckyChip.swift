@@ -10,21 +10,34 @@ struct LuckyStatusDot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wide = false
 
+    private var shouldPulse: Bool { pulsing && !reduceMotion }
+
     var body: some View {
         Circle()
             .fill(tone.tint)
             .frame(width: size, height: size)
             .overlay {
-                Circle()
-                    .stroke(tone.tint.opacity(0.45), lineWidth: 2)
-                    .scaleEffect(wide ? 2.1 : 1)
-                    .opacity(wide ? 0 : 1)
+                if shouldPulse {
+                    Circle()
+                        .stroke(tone.tint.opacity(0.45), lineWidth: 2)
+                        .scaleEffect(wide ? 2.1 : 1)
+                        .opacity(wide ? 0 : 1)
+                }
             }
-            .onAppear {
-                guard pulsing, !reduceMotion else { return }
-                withAnimation(LuckyTheme.Motion.pulse) { wide = true }
-            }
+            .onAppear { syncPulse() }
+            .onChange(of: shouldPulse) { syncPulse() }
             .accessibilityHidden(true)
+    }
+
+    private func syncPulse() {
+        if shouldPulse {
+            wide = false
+            withAnimation(LuckyTheme.Motion.pulse) { wide = true }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { wide = false }
+        }
     }
 }
 

@@ -233,38 +233,65 @@ extension DockerScreen {
 // MARK: - 导航栏
 
 extension DockerScreen {
-    /// §6's `renderDockerNavigation`, minus the two pieces the navigation bar now owns: the
-    /// The workspace picker, then the four notices — all of which can show at once, and in
-    /// this order.
+    /// The horizontal one-tap workspace bar, followed by any active error or notice banners.
     private var header: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckyGlassMenuPicker(
-                title: "视图",
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckyHorizontalTabBar(
                 selection: viewSelection,
-                segments: DockerView.allCases.map {
-                    LuckySegment($0, $0.label, symbol: $0.symbol)
-                },
-                iconRole: view.iconRole
-            )
-            if !localError.isEmpty {
-                LuckyErrorCard(message: localError)
-            }
-            if !localNotice.isEmpty {
-                noticePill
-            }
-            if let failure = queryFailures[activeQuery], !failure.isEmpty {
-                LuckyErrorCard(message: failure) { Task { await refresh() } }
-            }
-            // The live sweep failed *and* the cached one has nothing to show. Its retry runs both,
-            // because either one succeeding is enough to fill the grid.
-            if containerStatRows.isEmpty, liveStatsNeeded, !liveStatsFailure.isEmpty {
-                LuckyErrorCard(message: "容器统计暂时不可用") {
-                    Task { await refreshStats() }
+                segments: DockerView.allCases.map { pane in
+                    LuckySegment(pane, pane.label, symbol: pane.symbol, badge: badgeCount(for: pane))
                 }
+            )
+            if hasNotices {
+                VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                    if !localError.isEmpty {
+                        LuckyErrorCard(message: localError)
+                    }
+                    if !localNotice.isEmpty {
+                        noticePill
+                    }
+                    if let failure = queryFailures[activeQuery], !failure.isEmpty {
+                        LuckyErrorCard(message: failure) { Task { await refresh() } }
+                    }
+                    // The live sweep failed *and* the cached one has nothing to show. Its retry runs both,
+                    // because either one succeeding is enough to fill the grid.
+                    if containerStatRows.isEmpty, liveStatsNeeded, !liveStatsFailure.isEmpty {
+                        LuckyErrorCard(message: "容器统计暂时不可用") {
+                            Task { await refreshStats() }
+                        }
+                    }
+                }
+                .padding(.horizontal, LuckyTheme.Space.gutter)
             }
         }
-        .padding(.horizontal, LuckyTheme.Space.gutter)
-        .padding(.bottom, LuckyTheme.Space.m)
+        .padding(.top, LuckyTheme.Space.xs)
+        .padding(.bottom, LuckyTheme.Space.s)
+    }
+
+    private var hasNotices: Bool {
+        !localError.isEmpty
+            || !localNotice.isEmpty
+            || !(queryFailures[activeQuery] ?? "").isEmpty
+            || (containerStatRows.isEmpty && liveStatsNeeded && !liveStatsFailure.isEmpty)
+    }
+
+    private func badgeCount(for pane: DockerView) -> Int? {
+        switch pane {
+        case .containers:
+            return (loaded.contains(.containers) || !containers.isEmpty) ? containers.count : nil
+        case .images:
+            return loaded.contains(.images) ? imageSnapshot.items.count : nil
+        case .compose:
+            return loaded.contains(.compose) ? projects.count : nil
+        case .networks:
+            return loaded.contains(.networks) ? networks.count : nil
+        case .volumes:
+            return loaded.contains(.volumes) ? volumes.count : nil
+        case .tasks:
+            return loaded.contains(.tasks) ? tasks.count : nil
+        case .settings, .logs:
+            return nil
+        }
     }
 
     /// The success-tinted pill §6 prints for `localNotice` — the batch-scan summaries and the two
