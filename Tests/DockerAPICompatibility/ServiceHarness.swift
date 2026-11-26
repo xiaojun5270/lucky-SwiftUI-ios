@@ -137,6 +137,71 @@ actor LuckyClient {
         _ = try await TunnelsService.setEnabled(.cloudflared, key: "c 1", enable: true)
         let sharedCalls = await client.requests
         check("DDNS SSL tunnel common V2/V3 contracts", sharedCalls.map(\.path) == ["/api/ddns/enable?enable=false&key=task%201", "/api/ddns/manualSync/task%201", "/api/ssl/cert%201?enable=false", "/api/frp/list/f%201/false", "/api/cloudflared/list/c%201/true"] && sharedCalls.map(\.method) == ["GET", "GET", "PUT", "GET", "GET"])
+        // Regression: nested Records (Key), RecordHistory (Records) and V3 RouterIPStates (Name) must never hijack /api/ddnstasklist.
+        let ddnsWithRecordsAndHistory = JSONParser.tryParse(#"""
+        {
+          "ret": 0,
+          "data": [
+            {
+              "TaskKey": "t1",
+              "TaskName": "AliDNS",
+              "Enable": true,
+              "DNS": {"Name": "alidns"},
+              "RouterIPStates": [
+                {"Name": "r1"}, {"Name": "r2"}, {"Name": "r3"}, {"Name": "r4"}, {"Name": "r5"}
+              ],
+              "Records": [
+                {
+                  "Key": "rec1", "DomainName": "example.com", "SubDomain": "www", "Type": "AAAA",
+                  "RecordHistory": [
+                    {"Time": "1", "Records": []}, {"Time": "2", "Records": []},
+                    {"Time": "3", "Records": []}, {"Time": "4", "Records": []},
+                    {"Time": "5", "Records": []}, {"Time": "6", "Records": []},
+                    {"Time": "7", "Records": []}, {"Time": "8", "Records": []}
+                  ]
+                },
+                {"Key": "rec2", "DomainName": "example.com", "SubDomain": "nas", "Type": "AAAA"},
+                {"Key": "rec3", "DomainName": "example.com", "SubDomain": "app", "Type": "AAAA"},
+                {"Key": "rec4", "DomainName": "example.com", "SubDomain": "git", "Type": "AAAA"}
+              ]
+            },
+            {
+              "TaskKey": "t2",
+              "TaskName": "Cloudflare",
+              "Enable": true,
+              "DNS": {"Name": "cloudflare"},
+              "Records": []
+            }
+          ]
+        }
+        """#)!
+        await client.reset([.success(ddnsWithRecordsAndHistory)])
+        let ddnsList = try await DdnsService.tasks()
+        check("DDNS task list not hijacked by nested Records/RecordHistory/RouterIPStates",
+              ddnsList.items.count == 2
+              && ddnsList.items[0]["TaskKey"] == .string("t1")
+              && ddnsList.items[1]["TaskKey"] == .string("t2"))
+        let ddnsMapPayload = JSONParser.tryParse(#"""
+        {
+          "ret": 0,
+          "data": {
+            "t1": {
+              "TaskKey": "t1", "TaskName": "MapTask", "DNS": {"Name": "alidns"},
+              "Records": [
+                {"Key": "r1", "RecordHistory": [{"Time": "1", "Records": []}, {"Time": "2", "Records": []}, {"Time": "3", "Records": []}, {"Time": "4", "Records": []}]},
+                {"Key": "r2"}, {"Key": "r3"}, {"Key": "r4"}
+              ]
+            }
+          }
+        }
+        """#)!
+        await client.reset([.success(ddnsMapPayload)])
+        let ddnsMapList = try await DdnsService.tasks()
+        check("DDNS map task list preserved without nested hijack",
+              ddnsMapList.items.count == 1 && ddnsMapList.items[0]["TaskKey"] == .string("t1"))
+        await client.reset([.success(JSONParser.tryParse(#"{"ret":0,"data":[]}"#)!)])
+        let ddnsEmptyList = try await DdnsService.tasks()
+        check("DDNS empty data array returns empty list", ddnsEmptyList.items.isEmpty)
         for error in [LuckyError("permission denied", statusCode: 403), LuckyError("registry failure", statusCode: 500), LuckyError("application rejected"), LuckyError("No such image", statusCode: 404)] {
             await client.reset([.failure(error)])
             do { _ = try await DockerService.upgradeImageContainers("app", containerIds: .array([.string("c1")])); check("upgrade failure propagated", false) }

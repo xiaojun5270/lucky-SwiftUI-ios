@@ -14,21 +14,77 @@ enum DdnsService {
         "RetryCount", "RetryInterval",
     ]
 
-    /// `taskScore(value)` — the fields that make a record look like a DDNS task.
+    /// Strong DDNS task keys that do not collide with nested DNS records (`Key`),
+    /// record sync history entries (`Records`), or V3 router IP state entries (`Name`).
+    private static let strongTaskKeys = [
+        "TaskKey", "taskKey", "DDNSTaskKey",
+        "TaskName", "taskName", "DDNSTaskName",
+        "DNS", "DNSProvider", "dnsProvider",
+        "V4QueryIPEnable", "V6QueryIPEnable",
+    ]
+
+    /// Legacy fallback keys for unusual payload shapes without standard wrappers or task keys.
     private static let taskKeys = [
         "TaskKey", "taskKey", "DDNSTaskKey", "Key", "key", "TaskName", "taskName",
         "DDNSTaskName", "Name", "name", "Records", "records", "DNSProvider", "dnsProvider",
     ]
 
-    /// `getDdnsTasks()` — `/api/ddnstasklist` has moved the task array between keys and
-    /// nesting levels across versions, and some builds return a map keyed by task id, so the
-    /// best-scoring group of task-shaped records wins instead of a key lookup.
+    private static let listKeys = [
+        "taskList", "ddnsTaskList", "tasks", "list", "data", "result",
+    ]
+
+    /// `getDdnsTasks()` — Lucky V2 and V3 return `{ ret: 0, data: [...] }`.
+    ///
+    /// Prefer explicit top-level/wrapped list keys first, then strong task-only keys, so nested
+    /// `Records` (`Key`), `RecordHistory` (`Records`), or V3 `RouterIPStates` (`Name`) arrays
+    /// can never outscore and hijack the real DDNS task list.
     static func tasks() async throws -> LuckyItemList {
         let raw = try await client.fetch("/api/ddnstasklist")
         return LuckyItemList(
-            items: JSONUnwrap.bestScoredRecords(raw, keys: taskKeys, includeRecordValues: true),
+            items: extractTasks(raw),
             raw: raw
         )
+    }
+
+    static func extractTasks(_ raw: JSONValue) -> [JSONValue] {
+        if case .array(let items) = raw {
+            return items.filter(\.isRecord)
+        }
+        if case .object(let root) = raw {
+            var sawExplicitEmptyList = false
+            for key in listKeys {
+                guard let match = root.keys.first(where: {
+                    $0.caseInsensitiveCompare(key) == .orderedSame
+                }), let candidate = root[match] else { continue }
+                switch candidate {
+                case .array(let items):
+                    let records = items.filter(\.isRecord)
+                    if !records.isEmpty { return records }
+                    sawExplicitEmptyList = true
+                case .null:
+                    sawExplicitEmptyList = true
+                case .object(let nested):
+                    for nestedKey in listKeys {
+                        guard let nestedMatch = nested.keys.first(where: {
+                            $0.caseInsensitiveCompare(nestedKey) == .orderedSame
+                        }), let nestedCandidate = nested[nestedMatch] else { continue }
+                        if case .array(let items) = nestedCandidate {
+                            let records = items.filter(\.isRecord)
+                            if !records.isEmpty { return records }
+                            sawExplicitEmptyList = true
+                        } else if nestedCandidate.isNull {
+                            sawExplicitEmptyList = true
+                        }
+                    }
+                default:
+                    continue
+                }
+            }
+            if sawExplicitEmptyList { return [] }
+        }
+        let strong = JSONUnwrap.bestScoredRecords(raw, keys: strongTaskKeys, includeRecordValues: true)
+        if !strong.isEmpty { return strong }
+        return JSONUnwrap.bestScoredRecords(raw, keys: taskKeys, includeRecordValues: true)
     }
 
     static func task(_ key: String) async throws -> JSONValue {
