@@ -367,7 +367,43 @@ enum LuckyFieldName {
         "ids": "目标列表",
         "compose_content": "Compose 配置内容",
         "compose_backup_path": "Compose 备份路径",
+        "compose_backup_default_max": "Compose 默认最大备份数",
+        "compose_backup_max_per_project": "单项目最大备份数",
+        "compose_discover_path": "Compose 扫描路径",
         "volume_backup_path": "数据卷备份路径",
+        "volume_backup_default_max": "数据卷默认最大备份数",
+        "volume_backup_max_per_volume": "单卷最大备份数",
+        "volume_backup_stop_containers": "备份数据卷时停止容器",
+        "volume_backup_stop_containers_per_volume": "单卷备份时停止容器",
+        "docker_host": "Docker 主机地址",
+        "quick_access_host": "快捷访问地址",
+        "work_data_path": "工作数据目录",
+        "temp_operation_path": "临时操作目录",
+        "registry_mirrors": "镜像加速源列表",
+        "center_only": "仅管理中心模式",
+        "can_edit_settings": "允许编辑设置",
+        "container_show_stopped": "显示已停止容器",
+        "container_selected_custom_group": "默认选中自定义分组",
+        "container_view_mode": "容器列表视图模式",
+        "runtime": "运行时信息",
+        "engine_available": "引擎可用",
+        "states": "折叠状态",
+        "mapping": "分组映射",
+        "order": "排序顺序",
+        "orderList": "排序顺序",
+        "containerGroupMap": "容器分组映射",
+        "in_progress": "进行中",
+        "queue": "排队队列",
+        "groups": "分组列表",
+        "collapsed": "已折叠",
+        "upgrades": "镜像升级记录",
+        "has_update": "有可用更新",
+        "latest_digest": "最新摘要",
+        "current_digest": "当前摘要",
+        "checked_at": "检测时间",
+        "mirrors": "镜像加速源",
+        "image_id": "镜像编号",
+        "dismissed": "已忽略",
         "build": "构建镜像",
         "running_in_container": "运行于容器内",
         "self_container_id": "自身容器编号",
@@ -1090,6 +1126,11 @@ struct StructuredRecordFields: View {
     @Binding var value: JSONObject
     var depth: Int = 0
     var allowStructuralEdits: Bool = true
+    var allowNestedEdits: Bool = false
+
+    private var canEditStructure: Bool {
+        depth == 0 ? allowStructuralEdits : (allowStructuralEdits || allowNestedEdits)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
@@ -1098,7 +1139,12 @@ struct StructuredRecordFields: View {
             ForEach(value.keys, id: \.self) { key in
                 entry(key)
             }
-            if allowStructuralEdits {
+            if value.isEmpty, depth > 0, !canEditStructure {
+                Text("暂无单独配置")
+                    .font(LuckyTheme.Text.caption)
+                    .foregroundStyle(LuckyTheme.textTertiary)
+            }
+            if canEditStructure {
                 StructuredAddField(existingKeys: value.keys) { key, item in
                     value[key] = item
                 }
@@ -1125,23 +1171,24 @@ struct StructuredRecordFields: View {
                         .foregroundStyle(LuckyTheme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    if allowStructuralEdits {
+                    if canEditStructure {
                         StructuredTrashButton(field: key, size: 28, radius: 8) { remove(key) }
                     }
                 }
                 StructuredRecordFields(value: recordBinding(key), depth: depth + 1,
-                                       allowStructuralEdits: allowStructuralEdits)
+                                       allowStructuralEdits: allowStructuralEdits,
+                                       allowNestedEdits: allowNestedEdits)
             })
         }
         if current.isArray {
             // `depth` rather than `depth + 1`: a list inside an object is not a new box, so it does
             // not gain a border.
             return AnyView(StructuredArrayField(name: key, value: arrayBinding(key), depth: depth,
-                                                allowStructuralEdits: allowStructuralEdits,
-                                                onRemove: allowStructuralEdits ? { remove(key) } : nil))
+                                                allowStructuralEdits: canEditStructure,
+                                                onRemove: canEditStructure ? { remove(key) } : nil))
         }
         return AnyView(StructuredPrimitiveField(name: key, value: binding(key),
-                                                onRemove: allowStructuralEdits ? { remove(key) } : nil))
+                                                onRemove: canEditStructure ? { remove(key) } : nil))
     }
 
     private func remove(_ key: String) {
@@ -1171,9 +1218,11 @@ struct StructuredRecordFields: View {
 struct StructuredForm: View {
     @Binding var value: JSONObject
     var allowStructuralEdits: Bool = true
+    var allowNestedEdits: Bool = false
 
     var body: some View {
-        StructuredRecordFields(value: $value, allowStructuralEdits: allowStructuralEdits)
+        StructuredRecordFields(value: $value, allowStructuralEdits: allowStructuralEdits,
+                               allowNestedEdits: allowNestedEdits)
     }
 }
 

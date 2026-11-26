@@ -43,21 +43,28 @@ struct DockerFormEditor: View {
             }
         } content: {
             LuckyCard {
-                StructuredForm(value: $value, allowStructuralEdits: allowsDynamicFields)
+                StructuredForm(value: $value, allowStructuralEdits: allowsDynamicFields,
+                               allowNestedEdits: allowsNestedMapEdits)
             }
         }
     }
 
-    /// Only open-ended container/image/network/volume schema forms allow adding/removing arbitrary keys;
-    /// fixed-field action forms hide per-field trash icons for a cleaner UI.
+    /// Only open-ended container/image/network/volume schema forms allow adding/removing arbitrary
+    /// top-level keys; fixed-field forms (including Docker settings) hide top-level trash buttons.
     private var allowsDynamicFields: Bool {
         switch request.kind {
         case .containerCreate, .containerEdit, .imageBuild, .imageBuildGit, .imageBuildZip,
-             .networkCreate, .volumeCreate, .configSave:
+             .networkCreate, .volumeCreate:
             return true
         default:
             return false
         }
+    }
+
+    /// Docker settings has fixed top-level keys, but nested map overrides (e.g. per-project /
+    /// per-volume backup limits) still allow adding and removing child entries.
+    private var allowsNestedMapEdits: Bool {
+        request.kind == .configSave
     }
 }
 

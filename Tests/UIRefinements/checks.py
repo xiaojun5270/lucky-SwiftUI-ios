@@ -417,6 +417,33 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn('LuckyErrorCard(message: failure, title: "登录失败"', login)
         self.assertIn("Capsule(style: .continuous)", login)
 
+        # 13. Docker settings Chinese localization, safe non-deletable top-level config fields,
+        # and native maintenance status panels (no raw nested JSON trees)
+        for token in [
+            '"docker_host": "Docker 主机地址"',
+            '"compose_backup_default_max": "Compose 默认最大备份数"',
+            '"compose_backup_max_per_project": "单项目最大备份数"',
+            '"compose_discover_path": "Compose 扫描路径"',
+            '"quick_access_host": "快捷访问地址"',
+            '"temp_operation_path": "临时操作目录"',
+            '"volume_backup_default_max": "数据卷默认最大备份数"',
+            '"in_progress": "进行中"',
+            '"queue": "排队队列"',
+            '"states": "折叠状态"',
+            '"mapping": "分组映射"',
+            '"order": "排序顺序"',
+        ]:
+            self.assertIn(token, form)
+        self.assertIn("var allowNestedEdits: Bool = false", form)
+        docker_editors = source("Features/Docker/DockerEditors.swift")
+        self.assertIn("allowNestedEdits: allowsNestedMapEdits", docker_editors)
+        self.assertNotIn(".volumeCreate, .configSave:", docker_editors)
+        docker_settings = source("Features/Docker/DockerSettingsView.swift")
+        self.assertIn("private func backupStatusRow(", docker_settings)
+        self.assertIn("private func parseGroups(", docker_settings)
+        self.assertIn("暂未创建自定义容器分组", docker_settings)
+        self.assertIn("进行中 \\(activeCount) · 排队中 \\(queuedCount)", docker_settings)
+
 
 if __name__ == "__main__":
     unittest.main()

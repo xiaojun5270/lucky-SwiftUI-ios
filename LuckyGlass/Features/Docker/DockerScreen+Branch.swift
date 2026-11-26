@@ -322,17 +322,23 @@ extension DockerScreen {
     }
 
     private var settingsActions: DockerSettingsActions {
-        let group: JSONValue = .object([("Name", .string("")), ("Key", .string(""))])
+        let emptyGroup: JSONValue = .object([("Name", .string("")), ("Key", .string(""))])
         return DockerSettingsActions(
             editConfig: {
                 openEditor(.configSave, title: "编辑 Docker 设置",
                            value: .object(DockerRecord.nested(config ?? .null, ["config", "data"])))
             },
-            createGroup: { openEditor(.groupCreate, title: "添加容器分组", value: group) },
-            updateGroup: { openEditor(.groupUpdate, title: "编辑容器分组", value: group) },
-            removeGroup: {
+            createGroup: { openEditor(.groupCreate, title: "添加容器分组", value: emptyGroup) },
+            updateGroup: { name, key in
+                let prefilled: JSONValue = .object([
+                    ("Name", .string(name ?? "")),
+                    ("Key", .string(key ?? "")),
+                ])
+                openEditor(.groupUpdate, title: "编辑容器分组", value: prefilled)
+            },
+            removeGroup: { key in
                 openEditor(.groupRemove, title: "删除容器分组",
-                           value: .object([("key", .string(""))]))
+                           value: .object([("key", .string(key ?? ""))]))
             },
             clearUpgrades: {
                 danger("清除升级状态", "确定清除全部镜像升级检查记录吗？") {
@@ -343,9 +349,9 @@ extension DockerScreen {
                 openEditor(.mirrorAdd, title: "添加镜像加速地址",
                            value: .object([("mirror", .string(""))]))
             },
-            removeMirror: {
+            removeMirror: { mirror in
                 openEditor(.mirrorRemove, title: "删除镜像加速地址",
-                           value: .object([("mirror", .string(""))]))
+                           value: .object([("mirror", .string(mirror ?? ""))]))
             },
             // `volumes` defaults to false: a prune that takes the data with it should be a
             // decision, not a default.
