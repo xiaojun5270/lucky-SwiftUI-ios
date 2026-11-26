@@ -47,13 +47,14 @@ struct LuckyLogView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     rows(query.jsTrimmed)
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
                 }
-                .padding(LuckyTheme.Space.l)
+                .padding(.horizontal, LuckyTheme.Space.m)
+                .padding(.vertical, LuckyTheme.Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
             }
@@ -89,28 +90,41 @@ private struct LuckyLogLine: View, Equatable {
 
     var body: some View {
         let tone = Self.tone(line)
-        Group {
-            if needle.isEmpty {
-                Text(verbatim: line)
-                    .font(LuckyTheme.Text.code)
-                    .lineSpacing(2)
-                    .foregroundStyle(tone?.tint ?? LuckyTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(attributed(line, needle: needle))
-                    .font(LuckyTheme.Text.code)
-                    .lineSpacing(2)
-                    .foregroundStyle(tone?.tint ?? LuckyTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        renderedText(tone: tone)
+            .font(LuckyTheme.Text.code)
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, tone != nil ? 10 : 2)
+            .padding(.trailing, tone != nil ? 6 : 2)
+            .padding(.vertical, tone != nil ? 3 : 1)
+            .background {
+                if let tone {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(tone.tint.opacity(0.09))
+                }
             }
-        }
-        .padding(.horizontal, tone != nil ? 6 : 0)
-        .padding(.vertical, tone != nil ? 2 : 0)
-        .background {
-            if let tone {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(tone.tint.opacity(0.10))
+            .overlay(alignment: .leading) {
+                if let tone {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(tone.tint)
+                        .frame(width: 2.5)
+                        .padding(.vertical, 3)
+                        .padding(.leading, 2.5)
+                }
             }
+    }
+
+    @ViewBuilder
+    private func renderedText(tone: LuckyTone?) -> some View {
+        let baseColor = tone?.tint ?? LuckyTheme.textPrimary
+        if needle.isEmpty, let split = Self.splitLeadingTimestamp(line) {
+            Text(attributedWithTimestamp(prefix: split.prefix, body: split.body, bodyColor: baseColor))
+        } else if needle.isEmpty {
+            Text(verbatim: line)
+                .foregroundStyle(baseColor)
+        } else {
+            Text(attributed(line, needle: needle, baseColor: baseColor))
         }
     }
 
@@ -120,10 +134,48 @@ private struct LuckyLogLine: View, Equatable {
         LuckyLogSeverity.detect(line).tone
     }
 
+    /// Zero-regex detector for leading Lucky timestamps like `[2026-11-26 12:34:56]` or `2026/11/26 12:34:56`.
+    private static func splitLeadingTimestamp(_ line: String) -> (prefix: Substring, body: Substring)? {
+        guard line.count >= 19 else { return nil }
+        let start = line.startIndex
+        if line[start] == "[" {
+            guard let close = line.prefix(32).firstIndex(of: "]") else { return nil }
+            let inner = line[line.index(after: start)..<close]
+            guard inner.count >= 10, inner.first?.isNumber == true else { return nil }
+            let next = line.index(after: close)
+            guard next < line.endIndex else { return nil }
+            return (line[start...close], line[next...])
+        }
+        let head = line.prefix(19)
+        let bytes = Array(head.utf8)
+        guard bytes.count == 19,
+              bytes[0] >= 48 && bytes[0] <= 57,
+              bytes[4] == 45 || bytes[4] == 47,
+              bytes[7] == 45 || bytes[7] == 47,
+              bytes[10] == 32 || bytes[10] == 84,
+              bytes[13] == 58, bytes[16] == 58 else { return nil }
+        let splitIdx = line.index(start, offsetBy: 19)
+        return (line[start..<splitIdx], line[splitIdx...])
+    }
+
+    private func attributedWithTimestamp(prefix: Substring, body: Substring, bodyColor: Color) -> AttributedString {
+        var head = AttributedString(prefix)
+        head.foregroundColor = LuckyTheme.textTertiary
+        var tail = AttributedString(body)
+        tail.foregroundColor = bodyColor
+        head.append(tail)
+        return head
+    }
+
     /// Marks every occurrence of the query. `AttributedString` is built per visible line only, and
     /// only when there is something to mark.
-    private func attributed(_ line: String, needle: String) -> AttributedString {
+    private func attributed(_ line: String, needle: String, baseColor: Color) -> AttributedString {
         var text = AttributedString(line)
+        text.foregroundColor = baseColor
+        if let split = Self.splitLeadingTimestamp(line),
+           let range = text.range(of: String(split.prefix)) {
+            text[range].foregroundColor = LuckyTheme.textTertiary
+        }
         var cursor = text.startIndex
         while cursor < text.endIndex,
               let found = text[cursor...].range(of: needle, options: .caseInsensitive) {

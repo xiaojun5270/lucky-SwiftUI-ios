@@ -539,6 +539,7 @@ final class DockerStatsCache {
     func clearAllDiskCaches() async {
         clear()
         WebRulesCache.shared.clear()
+        ServiceSummaryCache.shared.clear()
         await Task.detached(priority: .utility) {
             guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
                 return

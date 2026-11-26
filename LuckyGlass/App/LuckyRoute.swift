@@ -31,13 +31,13 @@ enum LuckyRoute: Hashable {
     /// Here the navigation bar *is* that header, so it has to say which module this is.
     var title: String {
         switch self {
-        case .service: "服务详情"
-        case .webservice: "Web 服务"
-        case .docker: "Docker"
-        case .tunnel(let kind): kind.title
-        case .module: "模块接口"
-        case .endpoint: "接口调试"
-        case .moduleIndex: "接口调试"
+        case .service(let kind): return kind.title
+        case .webservice: return "Web 服务"
+        case .docker: return "Docker"
+        case .tunnel(let kind): return kind.title
+        case .module: return "模块接口"
+        case .endpoint: return "接口调试"
+        case .moduleIndex: return "接口调试"
         }
     }
 }

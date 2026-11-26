@@ -225,16 +225,17 @@ struct ServiceDetailScreen: View {
                     LuckySegment(Mode.logs, "日志", symbol: LuckySymbol.logs),
                 ]
             )
-            // `{mutation.error ? <ErrorState /> : null}` and the editor's own failure. The original
-            // mounts three of these — one per mutation — but ddns and ssl cannot both be live on a
-            // screen that has a single kind.
-            if !actionFailure.isEmpty {
-                LuckyErrorCard(message: actionFailure)
-                    .padding(.horizontal, LuckyTheme.Space.gutter)
-            }
-            if !editorFailure.isEmpty {
-                LuckyErrorCard(message: editorFailure)
-                    .padding(.horizontal, LuckyTheme.Space.gutter)
+            // `{mutation.error ? <ErrorState /> : null}` and the editor's own failure. Only shown
+            // on the list pane and dismissible so switching to 日志 never leaves a stale banner stuck.
+            if mode == .list {
+                if !actionFailure.isEmpty {
+                    LuckyErrorCard(message: actionFailure, dismiss: { actionFailure = "" })
+                        .padding(.horizontal, LuckyTheme.Space.gutter)
+                }
+                if !editorFailure.isEmpty {
+                    LuckyErrorCard(message: editorFailure, dismiss: { editorFailure = "" })
+                        .padding(.horizontal, LuckyTheme.Space.gutter)
+                }
             }
         }
         .padding(.top, LuckyTheme.Space.xs)
@@ -430,8 +431,8 @@ struct ServiceDetailScreen: View {
 
     // MARK: - Rows
 
-    /// Compact card layout: inline enable toggle in the header and a single primary action row
-    /// with secondary/destructive verbs tucked into the trailing menu.
+    /// Compact card layout: inline enable toggle in the header, structured metadata chips
+    /// (SSL expiry countdown & domains / DDNS tap-to-copy IPv4 & IPv6), and a single primary action row.
     @ViewBuilder
     private func row(_ item: LuckyListItem, _ index: Int) -> some View {
         let key = ServiceRecord.key(item, index)
@@ -439,6 +440,11 @@ struct ServiceDetailScreen: View {
         LuckyCard(radius: 14, padding: 0, spacing: 0) {
             VStack(alignment: .leading, spacing: 7) {
                 rowHeader(item, key: key, name: name)
+                if kind == .ssl {
+                    sslMetadataStrip(item)
+                } else if kind == .ddns {
+                    ddnsMetadataStrip(item)
+                }
                 if kind == .docker {
                     dockerRow(key: key)
                     ServiceActionButton(title: "查看日志", symbol: LuckySymbol.logs, fill: .plain,
@@ -462,9 +468,21 @@ struct ServiceDetailScreen: View {
     /// The tappable header with inline enable toggle for DDNS / SSL so every card saves ~44pt.
     private func rowHeader(_ item: LuckyListItem, key: String, name: String) -> some View {
         let expanded = selectedKey == key
-        let summary = ServiceRecord.rowDetail(item, kind: kind)
         let status = ServiceRecord.rowStatus(item)
         let on = ServiceRecord.isEnabled(item)
+        let sslInfo = kind == .ssl ? ServiceRecord.sslCardInfo(item) : nil
+        let ddnsInfo = kind == .ddns ? ServiceRecord.ddnsCardInfo(item) : nil
+        let subtitle: String = {
+            if let sslInfo {
+                let parts = [sslInfo.typeLabel,
+                             sslInfo.expiryText.isEmpty ? "" : "到期 \(sslInfo.expiryText)"]
+                return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+            }
+            if let ddnsInfo {
+                return "\(ddnsInfo.provider) · \(ddnsInfo.recordCount) 条记录"
+            }
+            return ServiceRecord.rowDetail(item, kind: kind)
+        }()
         return HStack(alignment: .center, spacing: 8) {
             Button {
                 LuckyHaptic.light()
@@ -481,9 +499,14 @@ struct ServiceDetailScreen: View {
                                 .lineLimit(1)
                             LuckyChip(text: status,
                                       tone: ServiceRecord.isHealthyStatus(status) ? .ok : .idle)
+                                .fixedSize(horizontal: true, vertical: false)
+                            if let expiryBadge = sslInfo?.expiryBadge {
+                                LuckyChip(text: expiryBadge.text, tone: expiryBadge.tone)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
                         }
-                        if !summary.isEmpty {
-                            Text(summary)
+                        if !subtitle.isEmpty {
+                            Text(subtitle)
                                 .font(.system(size: 11))
                                 .foregroundStyle(LuckyTheme.textSecondary)
                                 .lineLimit(2)
@@ -512,6 +535,95 @@ struct ServiceDetailScreen: View {
                     .accessibilityLabel("启用 \(name)")
             }
         }
+    }
+
+    /// Dedicated monospaced domain strip for SSL cards with one-tap copy.
+    @ViewBuilder
+    private func sslMetadataStrip(_ item: LuckyListItem) -> some View {
+        let domains = ServiceRecord.sslCardInfo(item).domains
+        if let primary = domains.first {
+            let extraCount = max(0, domains.count - 1)
+            Button {
+                LuckyHaptic.light()
+                LuckyClipboard.copy(domains.joined(separator: ", "))
+                toast = .ok(domains.count == 1 ? "已复制域名 \(primary)" : "已复制全部 \(domains.count) 个域名")
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(LuckyTheme.accent)
+                    Text(primary)
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(LuckyTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if extraCount > 0 {
+                        Text("+\(extraCount)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(LuckyTheme.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(LuckyTheme.accentSoft, in: .capsule)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: LuckySymbol.copy)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(LuckyTheme.textTertiary)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 8))
+            }
+            .buttonStyle(LuckyPressStyle(pressedScale: 0.98, pressedOpacity: 0.72))
+            .accessibilityLabel("复制证书域名 \(domains.joined(separator: ", "))")
+        }
+    }
+
+    /// Dedicated monospaced IPv4 / IPv6 pills for DDNS cards with one-tap copy.
+    @ViewBuilder
+    private func ddnsMetadataStrip(_ item: LuckyListItem) -> some View {
+        let info = ServiceRecord.ddnsCardInfo(item)
+        if !info.ipv4.isEmpty || !info.ipv6.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                if !info.ipv4.isEmpty {
+                    copyableAddressPill(tag: "IPv4", address: info.ipv4, tint: LuckyTheme.accent)
+                }
+                if !info.ipv6.isEmpty {
+                    copyableAddressPill(tag: "IPv6", address: info.ipv6, tint: LuckyTheme.info)
+                }
+            }
+        }
+    }
+
+    private func copyableAddressPill(tag: String, address: String, tint: Color) -> some View {
+        Button {
+            LuckyHaptic.light()
+            LuckyClipboard.copy(address)
+            toast = .ok("已复制 \(tag) 地址")
+        } label: {
+            HStack(spacing: 6) {
+                Text(tag)
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(tint.opacity(0.14), in: .rect(cornerRadius: 4))
+                Text(address)
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(LuckyTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 4)
+                Image(systemName: LuckySymbol.copy)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LuckyTheme.textTertiary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(LuckyTheme.surfaceRaised, in: .rect(cornerRadius: 8))
+        }
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.98, pressedOpacity: 0.72))
+        .accessibilityLabel("复制 \(tag) 地址 \(address)")
     }
 
     /// The five Docker verbs. The original lays them out at `width: '31%'` with `flexWrap`, which
@@ -636,12 +748,19 @@ struct ServiceDetailScreen: View {
     /// `kind={kind === 'ssl' ? 'ssl' : 'ddns'}` — 高级操作 is only reachable from those two lists,
     /// and the normalisation keeps the sheet from having to know about the other two.
     private func advancedSheet(_ request: ServiceAdvancedRequest) -> some View {
-        ServiceAdvancedSheet(
+        let labels = Dictionary(
+            items.enumerated().map { index, item in
+                (ServiceRecord.key(item, index), ServiceRecord.displayName(item, kind: kind, index: index))
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return ServiceAdvancedSheet(
             kind: kind == .ssl ? .ssl : .ddns,
             itemKey: request.key,
             name: request.name,
             item: request.item,
             orderKeys: items.enumerated().map { ServiceRecord.key($1, $0) },
+            orderLabels: labels,
             close: { advanced = nil },
             reorder: { keys in try await reorder(keys) },
             changed: { await loadList() },
@@ -665,6 +784,10 @@ struct ServiceDetailScreen: View {
     /// fires when the value actually differs.
     private var modeSelection: Binding<Mode> {
         Binding(get: { mode }, set: { value in
+            if value != mode {
+                actionFailure = ""
+                editorFailure = ""
+            }
             mode = value
             if value == .logs { logKey = nil }
         })
@@ -956,6 +1079,8 @@ struct ServiceDetailScreen: View {
         }
         do {
             items = try await LuckyService.items(kind).items
+            ServiceSummaryCache.shared.activate(credentials: LuckySession.shared.credentials)
+            ServiceSummaryCache.shared.update(kind: kind, items: items)
             listFailure = ""
         } catch {
             guard !error.isCancellation else { return }
@@ -1021,6 +1146,8 @@ struct ServiceDetailScreen: View {
 
     /// `onRefresh={() => view === 'logs' && logsEnabled ? logsQuery.refetch() : query.refetch()}`.
     private func refresh() async {
+        actionFailure = ""
+        editorFailure = ""
         if mode == .logs {
             await loadLogs()
         } else {

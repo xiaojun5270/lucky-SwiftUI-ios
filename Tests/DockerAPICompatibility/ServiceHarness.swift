@@ -202,6 +202,43 @@ actor LuckyClient {
         await client.reset([.success(JSONParser.tryParse(#"{"ret":0,"data":[]}"#)!)])
         let ddnsEmptyList = try await DdnsService.tasks()
         check("DDNS empty data array returns empty list", ddnsEmptyList.items.isEmpty)
+        await client.reset([.failure(LuckyError("NotMeetCertificateRenewalAdvanceTime\n835h37m49.961571076s > 720h0m0s"))])
+        do {
+            _ = try await SslService.flushCertificate("cert1")
+            check("SSL flush early renewal throws localized message", false)
+        } catch {
+            check("SSL flush early renewal formats Go duration to Chinese",
+                  error.luckyMessage() == "当前证书还未到续期时间：剩余有效期 34天19小时37分钟，需要小于续期提前时间 30天 后才能手动续期")
+        }
+        await client.reset([.failure(LuckyError("NotMeetCertificateRenewalAdvanceTime 12h5m30s > 24h0m0s"))])
+        do {
+            _ = try await SslService.flushCertificate("cert1")
+            check("SSL flush sub-day renewal throws localized message", false)
+        } catch {
+            check("SSL flush sub-day duration formats cleanly",
+                  error.luckyMessage() == "当前证书还未到续期时间：剩余有效期 12小时5分钟，需要小于续期提前时间 1天 后才能手动续期")
+        }
+        await client.reset([.failure(LuckyError("UnsupportedRefreshType"))])
+        do {
+            _ = try await SslService.flushCertificate("cert1")
+            check("SSL flush unsupported type throws localized message", false)
+        } catch {
+            check("SSL sentinel translated to Chinese", error.luckyMessage() == "当前证书类型不支持手动刷新")
+        }
+        await client.reset([.failure(LuckyError("PermissionDeniedCannotUseSyncFunction"))])
+        do {
+            _ = try await SslService.syncCertificate("cert1")
+            check("SSL sync permission denied throws localized message", false)
+        } catch {
+            check("SSL sync permission denied retains Chinese copy", error.luckyMessage() == "当前账号没有证书分发同步权限")
+        }
+        await client.reset([.failure(LuckyAuthError())])
+        do {
+            _ = try await SslService.flushCertificate("cert1")
+            check("SSL auth error must not be swallowed", false)
+        } catch {
+            check("SSL auth error preserved untouched", error is LuckyAuthError)
+        }
         for error in [LuckyError("permission denied", statusCode: 403), LuckyError("registry failure", statusCode: 500), LuckyError("application rejected"), LuckyError("No such image", statusCode: 404)] {
             await client.reset([.failure(error)])
             do { _ = try await DockerService.upgradeImageContainers("app", containerIds: .array([.string("c1")])); check("upgrade failure propagated", false) }

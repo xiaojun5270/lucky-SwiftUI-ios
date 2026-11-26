@@ -109,12 +109,7 @@ struct LoginScreen: View {
                     .frame(minHeight: LuckyTheme.Space.touchTarget, alignment: .leading)
             }
             if !failure.isEmpty {
-                Text(failure)
-                    .font(LuckyTheme.Text.body)
-                    .foregroundStyle(LuckyTheme.danger)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(LuckyTheme.Space.m)
-                    .background(ConcentricRectangle().fill(LuckyTheme.dangerSoft))
+                LuckyErrorCard(message: failure, title: "登录失败", dismiss: { failure = "" })
             }
         }
     }
@@ -132,7 +127,8 @@ struct LoginScreen: View {
             }
             .foregroundStyle(LuckyTheme.textOnAccent)
             .frame(maxWidth: .infinity, minHeight: 54)
-            .background(LuckyTheme.accent, in: .rect(cornerRadius: LuckyTheme.Radius.panel))
+            .background(LuckyTheme.accent, in: Capsule(style: .continuous))
+            .shadow(color: LuckyTheme.accent.opacity(0.28), radius: 12, x: 0, y: 5)
         }
         .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.78))
         .disabled(submitting)

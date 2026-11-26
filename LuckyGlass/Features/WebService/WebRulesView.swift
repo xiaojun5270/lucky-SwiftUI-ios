@@ -73,10 +73,14 @@ private struct WebRuleCard: View {
     private var subs: [WebSubRuleEntry] { entry.subRules }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
-            LuckyCard(spacing: LuckyTheme.Space.l, tone: isOpen ? .brand : nil) {
-                header
-                primaryActions
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
+            LuckyCard(radius: 16, padding: 0, spacing: 0, tone: isOpen ? .brand : nil) {
+                VStack(alignment: .leading, spacing: 8) {
+                    header
+                    primaryActions
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
             if isOpen { expansion }
         }
@@ -84,21 +88,21 @@ private struct WebRuleCard: View {
 
     private var headerLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.m))
-            : AnyLayout(HStackLayout(spacing: LuckyTheme.Space.m))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LuckyTheme.Space.s))
+            : AnyLayout(HStackLayout(spacing: 8))
     }
 
     private var header: some View {
         headerLayout {
-            HStack(spacing: LuckyTheme.Space.m) {
-                LuckyIconTile(symbol: LuckySymbol.network, size: 40, glyph: 19, role: .web)
-                VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 9) {
+                LuckyIconTile(symbol: LuckySymbol.network, size: 32, glyph: 15, role: .web)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
-                        .font(LuckyTheme.Text.cardTitle)
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(LuckyTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(entry.listener)
-                        .font(LuckyTheme.Text.caption.monospaced())
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(LuckyTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
@@ -113,9 +117,10 @@ private struct WebRuleCard: View {
                 WebEnableSwitch(isOn: entry.enabled, disabled: busy, name: "启用规则 \(entry.name)") {
                     actions.setEnabled(entry.id, $0)
                 }
+                .controlSize(.small)
                 .tint(LuckyTheme.success)
                 .fixedSize()
-                .frame(minHeight: LuckyTheme.Space.touchTarget)
+                .frame(minHeight: 34)
             }
         }
     }
@@ -123,18 +128,19 @@ private struct WebRuleCard: View {
     @ViewBuilder
     private var primaryActions: some View {
         if dynamicTypeSize >= .xxLarge {
-            VStack(spacing: LuckyTheme.Space.s) {
+            VStack(spacing: 6) {
                 childrenButton
-                HStack(spacing: LuckyTheme.Space.s) { editButton; moreMenu }
+                HStack(spacing: 6) { editButton; moreMenu }
             }
         } else {
-            HStack(spacing: LuckyTheme.Space.s) { childrenButton; editButton; moreMenu }
+            HStack(spacing: 6) { childrenButton; editButton; moreMenu }
         }
     }
 
     private var childrenButton: some View {
         WebRuleActionButton(title: "子规则 \(subs.count)",
-                            symbol: isOpen ? "chevron.up" : "chevron.down", selected: isOpen) {
+                            symbol: isOpen ? "chevron.up" : "chevron.down",
+                            selected: isOpen, compact: true) {
             actions.expand(entry.id)
         }
         .accessibilityLabel("\(entry.name)，\(subs.count) 条子规则")
@@ -143,7 +149,7 @@ private struct WebRuleCard: View {
     }
 
     private var editButton: some View {
-        WebRuleActionButton(title: "编辑规则", symbol: "pencil", disabled: busy) {
+        WebRuleActionButton(title: "编辑规则", symbol: "pencil", compact: true, disabled: busy) {
             actions.edit(entry.id, false)
         }
         .accessibilityLabel("编辑规则 \(entry.name)")
@@ -175,7 +181,7 @@ private struct WebRuleCard: View {
                 }
             }
         } label: {
-            WebRuleActionLabel(symbol: "ellipsis", fills: false)
+            WebRuleActionLabel(symbol: "ellipsis", fills: false, compact: true)
         }
         .buttonStyle(.plain)
         .disabled(busy)
@@ -184,7 +190,7 @@ private struct WebRuleCard: View {
     }
 
     private var expansion: some View {
-        VStack(alignment: .leading, spacing: LuckyTheme.Space.m) {
+        VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
             if subs.isEmpty {
                 LuckyEmptyState(symbol: "point.topleft.down.to.point.bottomright.curvepath",
                                 title: "暂无子规则", message: "添加子规则，配置前端与后端地址") {
@@ -197,7 +203,7 @@ private struct WebRuleCard: View {
                     WebSubRuleCard(rule: entry, entry: sub, busy: busy, actions: actions)
                 }
                 if subs.count > 3 {
-                    WebRuleActionButton(title: "收起 \(entry.name) 的子规则", symbol: "chevron.up") {
+                    WebRuleActionButton(title: "收起 \(entry.name) 的子规则", symbol: "chevron.up", compact: true) {
                         actions.expand(entry.id)
                     }
                 }

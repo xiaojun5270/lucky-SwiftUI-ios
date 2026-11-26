@@ -12,6 +12,7 @@ struct ServiceAdvancedSheet: View {
     var name: String
     var item: JSONValue
     var orderKeys: [String]
+    var orderLabels: [String: String] = [:]
     var close: () -> Void
     /// Awaited so a rejected reorder can put the rows back and report why.
     var reorder: ([String]) async throws -> Void
@@ -139,14 +140,22 @@ extension ServiceAdvancedSheet {
         }
     }
 
-    /// `${index + 1}. ${key === itemKeyValue ? name : key}` — the row for *this* record prints its
-    /// name and takes the accent colour, so the user can see what they are moving.
+    /// Displays the human-readable item name (falling back to key) with an explicit index badge.
     func orderRow(_ index: Int, _ key: String) -> some View {
         let mine = key == itemKey
+        let displayTitle = orderLabels[key] ?? (mine ? name : key)
         return VStack(alignment: .leading, spacing: 0) {
             if index > 0 { LuckyHairline() }
             HStack(spacing: LuckyTheme.Space.s) {
-                Text("\(index + 1). \(mine ? name : key)")
+                Text("\(index + 1)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(mine ? LuckyTheme.accent : LuckyTheme.textTertiary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle().fill(mine ? LuckyTheme.accentSoft : LuckyTheme.surfaceRaised)
+                    )
+                Text(displayTitle)
                     .font(LuckyTheme.Text.label)
                     .foregroundStyle(mine ? LuckyTheme.accent : LuckyTheme.textPrimary)
                     .lineLimit(1)

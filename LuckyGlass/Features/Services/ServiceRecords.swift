@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 /// Presentation metadata for the four service kinds — the `config` map at the top of
@@ -145,9 +146,32 @@ enum ServiceRecord {
         return .object(value)
     }
 
-    /// `sslSummary(item)` — `TYPE · domains · 到期 date`, with empty parts dropped so a
-    /// file-uploaded certificate that reports nothing else still shows its type.
-    static func sslSummary(_ item: JSONValue) -> String {
+    /// Structured SSL metadata parsed once per card so expiry badges and tap-to-copy domains stay clean.
+    struct SslCardInfo: Equatable {
+        var typeLabel: String
+        var domains: [String]
+        var expiryText: String
+        var remainingDays: Int?
+
+        var expiryBadge: (text: String, tone: LuckyTone)? {
+            guard let days = remainingDays else { return nil }
+            if days < 0 { return ("已过期", .danger) }
+            if days == 0 { return ("今日到期", .danger) }
+            if days <= 7 { return ("剩 \(days) 天", .danger) }
+            if days <= 30 { return ("剩 \(days) 天 · 可续期", .warning) }
+            return ("剩余 \(days) 天", .ok)
+        }
+    }
+
+    /// Structured DDNS metadata so provider/count and tap-to-copy IPs render cleanly on separate lines.
+    struct DdnsCardInfo: Equatable {
+        var provider: String
+        var recordCount: Int
+        var ipv4: String
+        var ipv6: String
+    }
+
+    static func sslCardInfo(_ item: JSONValue, now: Date = Date()) -> SslCardInfo {
         let certs: JSONValue
         if let raw = item["CertsInfo"], let list = raw.arrayValue {
             certs = list.first(where: \.isRecord) ?? .object(JSONObject())
@@ -157,11 +181,11 @@ enum ServiceRecord {
         let ext = child(item, "ExtParams")
         var domains: [String] = []
         if let list = certs["Domains"]?.arrayValue {
-            domains = list.map(\.asDisplayString)
+            domains = list.map(\.asDisplayString).map(\.jsTrimmed).filter { !$0.isEmpty }
         } else if let list = item["Domains"]?.arrayValue {
-            domains = list.map(\.asDisplayString)
+            domains = list.map(\.asDisplayString).map(\.jsTrimmed).filter { !$0.isEmpty }
         } else if let list = ext["acmeDomains"]?.arrayValue {
-            domains = list.map(\.asDisplayString)
+            domains = list.map(\.asDisplayString).map(\.jsTrimmed).filter { !$0.isEmpty }
         }
         let type = pick(item, ["AddFrom", "Type"], "file")
         let typeLabel: String = switch type.lowercased() {
@@ -171,10 +195,88 @@ enum ServiceRecord {
         case "sync": "同步证书"
         default: type.uppercased()
         }
-        let expiry = pick(certs, ["NotAfterTime", "NotAfter", "ExpireTime"],
-                          pick(item, ["ExpireTime", "UpdateTime"], ""))
-        let parts = [typeLabel, domains.joined(separator: ", "),
-                     expiry.isEmpty ? "" : "到期 \(expiry)"]
+        let expiryRaw = certs["NotAfterTime"] ?? certs["NotAfter"] ?? certs["ExpireTime"]
+            ?? item["NotAfterTime"] ?? item["ExpireTime"]
+        let expiryText = pick(certs, ["NotAfterTime", "NotAfter", "ExpireTime"],
+                              pick(item, ["NotAfterTime", "ExpireTime", "UpdateTime"], ""))
+        let expiryDate = parseExpiryDate(expiryRaw) ?? parseExpiryDate(.string(expiryText))
+        let remainingDays = expiryDate.map { date -> Int in
+            let seconds = date.timeIntervalSince(now)
+            if seconds < 0 { return -1 }
+            return Int(floor(seconds / 86_400))
+        }
+        let displayDate = expiryDate.map(shortDateString) ?? expiryText
+        return SslCardInfo(typeLabel: typeLabel, domains: domains,
+                           expiryText: displayDate, remainingDays: remainingDays)
+    }
+
+    static func ddnsCardInfo(_ item: JSONValue) -> DdnsCardInfo {
+        let dns = child(item, "DNS")
+        let rawProvider = pick(dns, ["Name"],
+                               pick(item, ["DNSProvider", "Provider"], "未设置服务商"))
+        let provider = ddnsProviderLabel(rawProvider)
+        let records = recordItems(item)
+        let rawV4 = pick(item, ["Ipv4Addr", "IPv4Addr", "V4Addr"], "")
+        let rawV6 = pick(item, ["Ipv6Addr", "IPv6Addr", "V6Addr"], "")
+        return DdnsCardInfo(
+            provider: provider,
+            recordCount: records.count,
+            ipv4: rawV4 == "--" ? "" : rawV4.jsTrimmed,
+            ipv6: rawV6 == "--" ? "" : rawV6.jsTrimmed
+        )
+    }
+
+    /// Parses ISO-8601, `yyyy-MM-dd HH:mm:ss`, `yyyy/MM/dd`, or Unix timestamps returned by Lucky V2/V3.
+    static func parseExpiryDate(_ raw: JSONValue?) -> Date? {
+        guard let raw, !raw.isNull else { return nil }
+        if case .number(let numeric) = raw, numeric > 1_000_000_000 {
+            let seconds = numeric > 10_000_000_000 ? numeric / 1000.0 : numeric
+            return Date(timeIntervalSince1970: seconds)
+        }
+        guard case .string(let text) = raw else { return nil }
+        let trimmed = text.jsTrimmed
+        guard !trimmed.isEmpty, trimmed != "--" else { return nil }
+        if let numeric = Double(trimmed), numeric > 1_000_000_000 {
+            let seconds = numeric > 10_000_000_000 ? numeric / 1000.0 : numeric
+            return Date(timeIntervalSince1970: seconds)
+        }
+        let isoFractional = ISO8601DateFormatter()
+        isoFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFractional.date(from: trimmed) { return date }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss ZZZZZ",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+        ]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        for fmt in formats {
+            formatter.dateFormat = fmt
+            if let date = formatter.date(from: trimmed) { return date }
+        }
+        return nil
+    }
+
+    private static func shortDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    /// `sslSummary(item)` — `TYPE · domains · 到期 date`, with empty parts dropped so a
+    /// file-uploaded certificate that reports nothing else still shows its type.
+    static func sslSummary(_ item: JSONValue) -> String {
+        let info = sslCardInfo(item)
+        let parts = [info.typeLabel, info.domains.joined(separator: ", "),
+                     info.expiryText.isEmpty ? "" : "到期 \(info.expiryText)"]
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -405,18 +507,12 @@ enum ServiceRecord {
     }
 
     static func ddnsSummary(_ item: JSONValue) -> String {
-        let dns = child(item, "DNS")
-        let rawProvider = pick(dns, ["Name"],
-                               pick(item, ["DNSProvider", "Provider"], "未设置服务商"))
-        let provider = ddnsProviderLabel(rawProvider)
-        let records = recordItems(item)
-        let ipv4 = pick(item, ["Ipv4Addr", "IPv4Addr", "V4Addr"], "")
-        let ipv6 = pick(item, ["Ipv6Addr", "IPv6Addr", "V6Addr"], "")
+        let info = ddnsCardInfo(item)
         return [
-            provider,
-            "\(records.count) 条记录",
-            ipv4.isEmpty || ipv4 == "--" ? "" : "IPv4 \(ipv4)",
-            ipv6.isEmpty || ipv6 == "--" ? "" : "IPv6 \(ipv6)",
+            info.provider,
+            "\(info.recordCount) 条记录",
+            info.ipv4.isEmpty ? "" : "IPv4 \(info.ipv4)",
+            info.ipv6.isEmpty ? "" : "IPv6 \(info.ipv6)",
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " · ")
@@ -429,5 +525,100 @@ enum ServiceRecord {
         let raw = pick(item, ["Status", "status", "State", "state", "LastResult"],
                        isEnabled(item) ? "正常" : "已停用")
         return localizedStatus(raw)
+    }
+}
+
+/// Account-scoped lightweight summary cache that feeds Dashboard's DDNS & SSL quick-link badges
+/// without blocking cold launch or leaking state across account switches.
+@MainActor
+@Observable
+final class ServiceSummaryCache {
+    static let shared = ServiceSummaryCache()
+
+    private(set) var ddnsLoaded = false
+    private(set) var ddnsTotal = 0
+    private(set) var ddnsEnabled = 0
+
+    private(set) var sslLoaded = false
+    private(set) var sslTotal = 0
+    private(set) var sslExpiringSoon = 0
+    private(set) var sslExpired = 0
+
+    private var activeAccountKey = ""
+    private var activeGeneration: UInt64 = 0
+    private var lastRefresh: Date?
+    private var refreshTask: Task<Void, Never>?
+
+    private init() {}
+
+    func activate(credentials: LuckyCredentials) {
+        let key = DockerStatsCache.accountKey(baseUrl: credentials.baseUrl, account: credentials.account)
+        guard key != activeAccountKey || credentials.generation != activeGeneration else { return }
+        refreshTask?.cancel()
+        refreshTask = nil
+        activeAccountKey = key
+        activeGeneration = credentials.generation
+        reset()
+    }
+
+    func clear() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        reset()
+    }
+
+    private func reset() {
+        ddnsLoaded = false
+        ddnsTotal = 0
+        ddnsEnabled = 0
+        sslLoaded = false
+        sslTotal = 0
+        sslExpiringSoon = 0
+        sslExpired = 0
+        lastRefresh = nil
+    }
+
+    func update(kind: LuckyServiceKind, items: [LuckyListItem]) {
+        switch kind {
+        case .ddns:
+            ddnsLoaded = true
+            ddnsTotal = items.count
+            ddnsEnabled = items.reduce(into: 0) { count, item in
+                if ServiceRecord.isEnabled(item) { count += 1 }
+            }
+        case .ssl:
+            sslLoaded = true
+            sslTotal = items.count
+            var soon = 0
+            var expired = 0
+            for item in items {
+                guard ServiceRecord.isEnabled(item),
+                      let days = ServiceRecord.sslCardInfo(item).remainingDays else { continue }
+                if days < 0 { expired += 1 }
+                else if days <= 30 { soon += 1 }
+            }
+            sslExpiringSoon = soon
+            sslExpired = expired
+        default:
+            break
+        }
+    }
+
+    func refreshIfNeeded(credentials: LuckyCredentials, force: Bool = false) async {
+        guard !credentials.baseUrl.isEmpty else { return }
+        activate(credentials: credentials)
+        if !force, let lastRefresh, Date().timeIntervalSince(lastRefresh) < 45, ddnsLoaded && sslLoaded {
+            return
+        }
+        let key = activeAccountKey
+        let generation = activeGeneration
+        lastRefresh = Date()
+
+        async let ddnsItems: [LuckyListItem]? = try? DdnsService.tasks().items
+        async let sslItems: [LuckyListItem]? = try? SslService.certificates().items
+        let (ddns, ssl) = await (ddnsItems, sslItems)
+        guard key == activeAccountKey, generation == activeGeneration else { return }
+        if let ddns { update(kind: .ddns, items: ddns) }
+        if let ssl { update(kind: .ssl, items: ssl) }
     }
 }

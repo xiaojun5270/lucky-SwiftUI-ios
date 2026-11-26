@@ -90,12 +90,13 @@ extension LuckyEmptyState where Actions == EmptyView {
 struct LuckyErrorCard: View {
     var message: String
     var title: String = "请求失败"
-    var retry: (() -> Void)?
+    var dismiss: (() -> Void)? = nil
+    var retry: (() -> Void)? = nil
 
     var body: some View {
         LuckyCard(tone: .danger) {
             HStack(alignment: .top, spacing: LuckyTheme.Space.m) {
-                LuckyIconTile(symbol: "exclamationmark.triangle.fill", size: 34, glyph: 15,
+                LuckyIconTile(symbol: "exclamationmark.triangle.fill", size: 28, glyph: 15,
                               tone: .danger)
                 VStack(alignment: .leading, spacing: LuckyTheme.Space.xs) {
                     Text(title)
@@ -108,6 +109,20 @@ struct LuckyErrorCard: View {
                         .textSelection(.enabled)
                 }
                 Spacer(minLength: 0)
+                if let dismiss {
+                    Button {
+                        LuckyHaptic.light()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(LuckyTheme.textTertiary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(LuckyPressStyle(pressedScale: 0.9, pressedOpacity: 0.65))
+                    .accessibilityLabel("关闭提示")
+                }
             }
             if let retry {
                 LuckyPillButton(title: "重试", symbol: "arrow.clockwise", tone: .danger,

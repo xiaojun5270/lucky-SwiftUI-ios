@@ -379,6 +379,44 @@ class UIRefinementsChecks(unittest.TestCase):
         self.assertIn('"sync_success"', records)
         self.assertIn('"sync_failure"', records)
 
+        # 11. SSL error localization, dismissible list banner & explicit module navigation title
+        ssl_svc = source("Services/SslService.swift")
+        self.assertIn("NotMeetCertificateRenewalAdvanceTime", ssl_svc)
+        self.assertIn("static func formatGoDuration(", ssl_svc)
+        self.assertIn("当前证书还未到续期时间", ssl_svc)
+        feedback = source("Design/LuckyFeedback.swift")
+        self.assertIn("var dismiss: (() -> Void)? = nil", feedback)
+        self.assertIn("if mode == .list {", detail)
+        self.assertIn('dismiss: { actionFailure = "" }', detail)
+        route = source("App/LuckyRoute.swift")
+        self.assertIn("case .service(let kind): return kind.title", route)
+
+        # 12. P0-P2 UI overhaul: structured SSL/DDNS cards, ordering labels, compact WebRuleCard,
+        # semantic log filter capsules, live Dashboard DDNS/SSL badges, terminal logs & login polish
+        self.assertIn("struct SslCardInfo: Equatable", records)
+        self.assertIn("struct DdnsCardInfo: Equatable", records)
+        self.assertIn("final class ServiceSummaryCache", records)
+        self.assertIn("private func sslMetadataStrip(", detail)
+        self.assertIn("private func ddnsMetadataStrip(", detail)
+        self.assertIn("orderLabels: labels", detail)
+        adv = source("Features/Services/ServiceAdvancedSheet.swift")
+        self.assertIn("var orderLabels: [String: String] = [:]", adv)
+        web_rules = source("Features/WebService/WebRulesView.swift")
+        self.assertIn("LuckyCard(radius: 16, padding: 0, spacing: 0, tone: isOpen ? .brand : nil)", web_rules)
+        self.assertIn("compact: true", web_rules)
+        self.assertIn("private func severityCapsule(", logs)
+        self.assertNotIn(".pickerStyle(.segmented)", logs)
+        self.assertIn("ServiceSummaryCache.shared", dashboard)
+        self.assertIn("var badgeTint: Color? = nil", dashboard)
+        log_view = source("Design/LuckyLogView.swift")
+        self.assertIn("splitLeadingTimestamp(", log_view)
+        self.assertIn(".overlay(alignment: .leading)", log_view)
+        field = source("Design/LuckyField.swift")
+        self.assertIn("LuckyTheme.hairline.opacity(0.55)", field)
+        login = source("Features/Login/LoginScreen.swift")
+        self.assertIn('LuckyErrorCard(message: failure, title: "登录失败"', login)
+        self.assertIn("Capsule(style: .continuous)", login)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -238,6 +238,7 @@ private struct DashboardQuickLink: View {
     var iconRole: LuckyIconRole
     var badge: String
     var live: Bool = false
+    var badgeTint: Color? = nil
     var action: () -> Void
 
     var body: some View {
@@ -256,7 +257,7 @@ private struct DashboardQuickLink: View {
                     .foregroundStyle(LuckyTheme.textPrimary)
                 Text(badge)
                     .font(.system(size: 10, weight: live ? .semibold : .medium, design: .rounded))
-                    .foregroundStyle(live ? iconRole.color : LuckyTheme.textTertiary)
+                    .foregroundStyle(badgeTint ?? (live ? iconRole.color : LuckyTheme.textTertiary))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -281,6 +282,7 @@ private struct DashboardShortcuts: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var dockerCache = DockerStatsCache.shared
     @State private var webCache = WebRulesCache.shared
+    @State private var serviceCache = ServiceSummaryCache.shared
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: LuckyTheme.Space.s),
@@ -301,6 +303,33 @@ private struct DashboardShortcuts: View {
 
     private var dockerBadge: String {
         hasDockerLive ? "\(dockerCache.runningContainerCount) 运行" : "容器管理"
+    }
+
+    private var hasDdnsLive: Bool {
+        serviceCache.ddnsLoaded && serviceCache.ddnsTotal > 0
+    }
+
+    private var ddnsBadge: String {
+        guard serviceCache.ddnsLoaded else { return "域名解析" }
+        return serviceCache.ddnsTotal == 0 ? "暂无任务" : "\(serviceCache.ddnsEnabled) 启用"
+    }
+
+    private var hasSslLive: Bool {
+        serviceCache.sslLoaded && serviceCache.sslTotal > 0
+    }
+
+    private var sslBadge: String {
+        guard serviceCache.sslLoaded else { return "证书管理" }
+        if serviceCache.sslExpired > 0 { return "\(serviceCache.sslExpired) 已过期" }
+        if serviceCache.sslExpiringSoon > 0 { return "\(serviceCache.sslExpiringSoon) 即将到期" }
+        return serviceCache.sslTotal == 0 ? "暂无证书" : "\(serviceCache.sslTotal) 证书"
+    }
+
+    private var sslBadgeTint: Color? {
+        guard serviceCache.sslLoaded else { return nil }
+        if serviceCache.sslExpired > 0 { return LuckyTheme.danger }
+        if serviceCache.sslExpiringSoon > 0 { return LuckyTheme.warning }
+        return nil
     }
 
     var body: some View {
@@ -329,11 +358,11 @@ private struct DashboardShortcuts: View {
                     navigator.push(.docker())
                 }
                 DashboardQuickLink(title: "动态域名", symbol: "globe.asia.australia", iconRole: .ddns,
-                                   badge: "域名解析") {
+                                   badge: ddnsBadge, live: hasDdnsLive) {
                     navigator.push(.service(.ddns))
                 }
                 DashboardQuickLink(title: "SSL 证书", symbol: "lock.shield", iconRole: .security,
-                                   badge: "证书管理") {
+                                   badge: sslBadge, live: hasSslLive, badgeTint: sslBadgeTint) {
                     navigator.push(.service(.ssl))
                 }
             }
@@ -712,8 +741,10 @@ struct DashboardScreen: View {
     @State private var rulesFetching = false
 
     init() {
+        let credentials = LuckySession.shared.credentials
         let cache = WebRulesCache.shared
-        cache.activate(credentials: LuckySession.shared.credentials)
+        cache.activate(credentials: credentials)
+        ServiceSummaryCache.shared.activate(credentials: credentials)
         _rules = State(initialValue: cache.rules)
         _rulesReady = State(initialValue: cache.loadedPanes.contains(.rules) || !cache.rules.isEmpty)
     }
@@ -913,7 +944,11 @@ struct DashboardScreen: View {
     }
 
     private func refreshAll() async {
-        await loadRules()
+        async let rulesRefresh: Void = loadRules()
+        async let serviceRefresh: Void = ServiceSummaryCache.shared.refreshIfNeeded(
+            credentials: session.credentials, force: true
+        )
+        _ = await (rulesRefresh, serviceRefresh)
     }
 
     /// The socket lives exactly as long as the tab is showing and the app is foregrounded. The

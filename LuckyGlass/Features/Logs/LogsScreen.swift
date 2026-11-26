@@ -221,13 +221,10 @@ struct LogsScreen: View {
     }
 
     private var filterBar: some View {
-        HStack(spacing: LuckyTheme.Space.s) {
-            Picker("日志级别", selection: $filter) {
-                Text("\(GlobalLogFilter.all.title) \(lines.count)").tag(GlobalLogFilter.all)
-                Text("\(GlobalLogFilter.warning.title) \(warningCount)").tag(GlobalLogFilter.warning)
-                Text("\(GlobalLogFilter.error.title) \(errorCount)").tag(GlobalLogFilter.error)
-            }
-            .pickerStyle(.segmented)
+        HStack(spacing: 6) {
+            severityCapsule(.all, count: lines.count, tint: LuckyTheme.accent, showDot: false)
+            severityCapsule(.warning, count: warningCount, tint: LuckyTheme.warning, showDot: warningCount > 0)
+            severityCapsule(.error, count: errorCount, tint: LuckyTheme.danger, showDot: errorCount > 0)
             Menu {
                 Button("复制当前日志", systemImage: LuckySymbol.copy) { copyVisibleLines() }
                     .disabled(visibleLines.isEmpty)
@@ -235,13 +232,58 @@ struct LogsScreen: View {
                     .disabled(lines.isEmpty)
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(LuckyTheme.Text.cardTitle)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(LuckyTheme.textSecondary)
                     .frame(width: 34, height: 34)
                     .background(LuckyTheme.surface, in: .circle)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(LuckyTheme.hairline.opacity(0.55),
+                                          lineWidth: LuckyTheme.strokeWidth)
+                    )
             }
             .accessibilityLabel("日志操作")
         }
+    }
+
+    private func severityCapsule(_ target: GlobalLogFilter, count: Int,
+                                 tint: Color, showDot: Bool) -> some View {
+        let selected = filter == target
+        let highlight = count > 0 && target != .all
+        return Button {
+            LuckyHaptic.selection()
+            filter = target
+        } label: {
+            HStack(spacing: 5) {
+                if showDot {
+                    Circle()
+                        .fill(selected ? LuckyTheme.textOnAccent : tint)
+                        .frame(width: 6, height: 6)
+                }
+                Text(target.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .opacity(selected ? 0.92 : 0.78)
+            }
+            .foregroundStyle(selected ? LuckyTheme.textOnAccent : (highlight ? tint : LuckyTheme.textSecondary))
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .background(Capsule(style: .continuous).fill(selected ? tint : LuckyTheme.surface))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(
+                        selected ? Color.clear : (highlight ? tint.opacity(0.35) : LuckyTheme.hairline.opacity(0.5)),
+                        lineWidth: LuckyTheme.strokeWidth
+                    )
+            )
+        }
+        .buttonStyle(LuckyPressStyle(pressedScale: 0.97, pressedOpacity: 0.78))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityLabel("\(target.title) \(count) 条")
     }
 
     private func copyVisibleLines() {

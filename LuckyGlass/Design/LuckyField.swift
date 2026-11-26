@@ -38,8 +38,8 @@ struct LuckySearchField: View {
             shape.fill(fill)
                 .overlay(
                     shape.strokeBorder(
-                        focused ? LuckyTheme.accent.opacity(0.7) : .clear,
-                        lineWidth: focused ? 1.6 : LuckyTheme.strokeWidth
+                        focused ? LuckyTheme.accent.opacity(0.75) : LuckyTheme.hairline.opacity(0.55),
+                        lineWidth: focused ? 1.5 : LuckyTheme.strokeWidth
                     )
                 )
         }
@@ -133,8 +133,10 @@ struct LuckyTextField: View {
             .fill(LuckyTheme.surfaceRaised)
             .overlay(
                 shape.strokeBorder(
-                    focused ? (tone ?? .brand).tint.opacity(0.7) : (tone?.tint.opacity(0.5) ?? .clear),
-                    lineWidth: focused ? 1.6 : LuckyTheme.strokeWidth
+                    focused
+                        ? (tone ?? .brand).tint.opacity(0.75)
+                        : (tone?.tint.opacity(0.55) ?? LuckyTheme.hairline.opacity(0.45)),
+                    lineWidth: focused ? 1.5 : LuckyTheme.strokeWidth
                 )
             )
     }
