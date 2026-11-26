@@ -235,13 +235,17 @@ enum ServiceRecord {
             .filter { !$0.isEmpty }
             .joined(separator: ", ") ?? ""
         let rawStatus = pick(item, ["UpdateStatus"], "")
-        let status: String = switch rawStatus.jsTrimmed.lowercased() {
-        case "success", "succeeded", "ok": "同步成功"
-        case "failure", "failed", "error": "同步失败"
-        case "unchanged", "skipped": "无变更"
-        case "pending", "waiting": "等待同步"
-        default: rawStatus
-        }
+        let status: String = {
+            switch rawStatus.jsTrimmed.lowercased() {
+            case "success", "succeeded", "ok", "sync_success": return "同步成功"
+            case "failure", "failed", "error", "sync_failure": return "同步失败"
+            case "unchanged", "skipped", "sync_loc_record_nochange": return "无变更"
+            case "sync_dns_ip_same": return "DNS 解析一致"
+            case "sync_provider_ip_same": return "服务商记录一致"
+            case "pending", "waiting": return "等待同步"
+            default: return rawStatus
+            }
+        }()
         return [status, latest, pick(item, ["Message"], "")]
             .filter { !$0.isEmpty && $0 != "--" }
             .joined(separator: " · ")

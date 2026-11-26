@@ -369,6 +369,16 @@ class UIRefinementsChecks(unittest.TestCase):
         docker_screen = source("Features/Docker/DockerScreen.swift")
         self.assertIn('LuckyPagerBadge(text: "第 \\(logPage) 页")', docker_screen)
 
+        # 10. DDNS / SSL empty state & tab copy aligned with Lucky web UI
+        self.assertNotIn("接口未返回列表数据", detail)
+        self.assertIn('case .ddns: return "任务列表"', detail)
+        self.assertIn('case .ddns: return "没有 DDNS 任务"', detail)
+        self.assertIn("创建首个 DDNS 任务", detail)
+        self.assertIn("DDNS 基础使用指南与常见问题", detail)
+        self.assertIn("https://lucky666.cn/docs/modules/ddns/", detail)
+        self.assertIn('"sync_success"', records)
+        self.assertIn('"sync_failure"', records)
+
 
 if __name__ == "__main__":
     unittest.main()

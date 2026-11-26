@@ -187,12 +187,40 @@ struct ServiceDetailScreen: View {
         mode == .list ? (kind == .ddns || kind == .ssl) : (logMode == .page)
     }
 
+    private static let ddnsGuideURL = URL(string: "https://lucky666.cn/docs/modules/ddns/")
+
+    private var listTabTitle: String {
+        switch kind {
+        case .ddns: return "任务列表"
+        case .ssl: return "证书列表"
+        case .webservice: return "规则列表"
+        case .docker: return "容器列表"
+        }
+    }
+
+    private var emptyTitle: String {
+        switch kind {
+        case .ddns: return "没有 DDNS 任务"
+        case .ssl: return "暂无 SSL 证书"
+        case .webservice: return "暂无反向代理规则"
+        case .docker: return "暂无容器"
+        }
+    }
+
+    private var emptyMessage: String? {
+        switch kind {
+        case .ddns: return "首次使用请先在模块设置中开启 DDNS 服务开关，再创建任务绑定公网 IP 与域名。"
+        case .ssl: return "点击下方按钮添加文件证书或申请 ACME 自动续期证书。"
+        case .webservice, .docker: return nil
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: LuckyTheme.Space.s) {
             LuckyHorizontalTabBar(
                 selection: modeSelection,
                 segments: [
-                    LuckySegment(Mode.list, "列表", symbol: "list.bullet",
+                    LuckySegment(Mode.list, listTabTitle, symbol: "list.bullet",
                                  badge: loaded ? items.count : nil),
                     LuckySegment(Mode.logs, "日志", symbol: LuckySymbol.logs),
                 ]
@@ -224,6 +252,12 @@ struct ServiceDetailScreen: View {
                 Button("模块设置", systemImage: "gearshape") { openSettingsEditor() }
                 Button(kind == .ssl ? "证书排序" : "任务排序", systemImage: "arrow.up.arrow.down") {
                     openOrdering()
+                }
+                if kind == .ddns, let url = Self.ddnsGuideURL {
+                    Divider()
+                    Link(destination: url) {
+                        Label("DDNS 使用指南", systemImage: "book")
+                    }
                 }
             }
         } else {
@@ -279,7 +313,7 @@ struct ServiceDetailScreen: View {
                     row(entry.item, entry.index)
                 }
                 if loaded, listFailure.isEmpty, items.isEmpty {
-                    LuckyEmptyState(symbol: LuckySymbol.kind(kind), title: "接口未返回列表数据")
+                    emptyState
                 }
             }
             .padding(.horizontal, LuckyTheme.Space.gutter)
@@ -294,6 +328,51 @@ struct ServiceDetailScreen: View {
             let work = Task { await loadList() }
             await work.value
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        LuckyEmptyState(symbol: LuckySymbol.kind(kind), title: emptyTitle, message: emptyMessage) {
+            if kind == .ddns || kind == .ssl {
+                VStack(spacing: LuckyTheme.Space.s) {
+                    LuckyPillButton(
+                        title: kind == .ddns ? "创建首个 DDNS 任务" : "添加首个 SSL 证书",
+                        symbol: LuckySymbol.add,
+                        prominent: true,
+                        fills: false
+                    ) {
+                        openAdd()
+                    }
+                    LuckyPillButton(
+                        title: kind == .ddns ? "DDNS 模块设置" : "SSL 模块设置",
+                        symbol: "gearshape.2",
+                        fills: false
+                    ) {
+                        openSettingsEditor()
+                    }
+                    if kind == .ddns, let url = Self.ddnsGuideURL {
+                        Link(destination: url) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("DDNS 基础使用指南与常见问题")
+                                    .font(LuckyTheme.Text.captionMedium)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundStyle(LuckyTheme.accent)
+                            .padding(.horizontal, LuckyTheme.Space.m)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(LuckyPressStyle(pressedScale: 0.96, pressedOpacity: 0.72))
+                    }
+                }
+                .padding(.top, LuckyTheme.Space.xs)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, LuckyTheme.Space.xl)
     }
 
     /// The log half. `LuckyLogView` scrolls internally, so this branch is a non-scrolling stack
